@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Systolic Array – Matrix Multiplication Visualizer</title>
+    <meta name="description" content="Interactive visualization of matrix multiplication wavefront pattern on a systolic array">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #06061a;
+            color: #c0c0e0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 24px 16px;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 50% 0%, rgba(40,40,120,0.15) 0%, transparent 60%),
+                linear-gradient(rgba(20,20,60,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(20,20,60,0.04) 1px, transparent 1px);
+            background-size: 100% 100%, 50px 50px, 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #app {
+            position: relative; z-index: 1;
+            max-width: 880px; width: 100%;
+        }
+
+        /* === HEADER === */
+        header { text-align: center; margin-bottom: 20px; }
+        header h1 {
+            font-size: 26px; font-weight: 700;
+            background: linear-gradient(135deg, #a0a0ff 0%, #60c0ff 50%, #00e0a0 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; letter-spacing: -0.5px;
+        }
+        header p { font-size: 13px; color: #505068; margin-top: 4px; }
+
+        /* === CONTROLS === */
+        .controls {
+            display: flex; align-items: center; justify-content: center;
+            gap: 14px; flex-wrap: wrap; margin-bottom: 14px;
+            padding: 10px 18px;
+            background: rgba(12,12,30,0.6);
+            border: 1px solid rgba(50,50,100,0.15);
+            border-radius: 14px;
+            backdrop-filter: blur(8px);
+        }
+        .control-group { display: flex; align-items: center; gap: 5px; }
+        .control-label {
+            font-size: 10px; color: #505068;
+            text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+            margin-right: 2px;
+        }
+        .size-btn, .step-btn {
+            width: 34px; height: 30px;
+            border: 1px solid rgba(70,70,140,0.3);
+            background: rgba(18,18,45,0.5); color: #707088;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px; font-weight: 600; border-radius: 7px;
+            cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .size-btn:hover, .step-btn:hover {
+            background: rgba(35,35,70,0.6);
+            border-color: rgba(90,90,180,0.4); color: #a0a0c0;
+        }
+        .size-btn.active {
+            background: rgba(70,70,180,0.25);
+            border-color: rgba(100,100,255,0.5); color: #c0c0ff;
+            box-shadow: 0 0 10px rgba(100,100,255,0.15);
+        }
+        .step-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+        .cycle-display {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; color: #8080a0;
+            min-width: 70px; text-align: center;
+        }
+        .play-btn {
+            width: 34px; height: 30px;
+            border: 1px solid rgba(80,180,80,0.3);
+            background: rgba(15,40,15,0.5); color: #50b050;
+            font-size: 13px; border-radius: 7px; cursor: pointer;
+            transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .play-btn:hover {
+            background: rgba(25,60,25,0.6);
+            border-color: rgba(80,180,80,0.5);
+        }
+        .play-btn.playing {
+            border-color: rgba(180,80,80,0.3);
+            background: rgba(40,15,15,0.5); color: #b05050;
+        }
+        .speed-control { display: flex; align-items: center; gap: 5px; }
+        .speed-control input[type="range"] { width: 70px; accent-color: #6666ff; }
+        .speed-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px; color: #505068; min-width: 28px;
+        }
+
+        /* === LEGEND === */
+        .legend {
+            display: flex; justify-content: center; gap: 18px;
+            margin-bottom: 14px; font-size: 11px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; color: #606078; }
+        .legend-swatch { width: 12px; height: 12px; border-radius: 3px; }
+        .legend-swatch.a { background: linear-gradient(135deg, #00bfff, #0088cc); }
+        .legend-swatch.b { background: linear-gradient(135deg, #ffa033, #cc7700); }
+        .legend-swatch.pe { background: rgba(30,30,70,0.8); border: 1px solid rgba(100,100,255,0.4); }
+        .legend-swatch.done { background: rgba(15,50,30,0.8); border: 1px solid rgba(0,180,80,0.4); }
+
+        /* === VISUALIZATION === */
+        .viz-wrapper {
+            position: relative; margin: 0 auto 20px;
+            overflow: hidden; border-radius: 16px;
+            background: rgba(8,8,20,0.4);
+            border: 1px solid rgba(40,40,80,0.15);
+        }
+        .h-track {
+            position: absolute; height: 0;
+            border-top: 1px dashed rgba(0,160,255,0.1);
+            pointer-events: none;
+        }
+        .v-track {
+            position: absolute; width: 0;
+            border-left: 1px dashed rgba(255,140,0,0.1);
+            pointer-events: none;
+        }
+
+        /* PE cells */
+        .pe {
+            position: absolute; width: 78px; height: 78px;
+            background: rgba(16,16,40,0.5);
+            border: 1px solid rgba(50,50,100,0.2);
+            border-radius: 11px;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            transition: background 0.25s, border-color 0.25s, box-shadow 0.25s;
+        }
+        .pe.active {
+            background: rgba(28,28,65,0.7);
+            border-color: rgba(100,100,255,0.45);
+            box-shadow: 0 0 18px rgba(100,100,255,0.12);
+        }
+        .pe.done {
+            background: rgba(12,35,22,0.5);
+            border-color: rgba(0,180,80,0.25);
+        }
+        .pe-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 19px; font-weight: 700; color: #d0d0f0; line-height: 1.2;
+        }
+        .pe-value.zero { color: #353555; }
+        .pe.active .pe-value { color: #fff; }
+        .pe.done .pe-value { color: #50e880; }
+        .pe-op {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px; color: #505070; margin-top: 1px; min-height: 14px;
+        }
+        .pe.active .pe-op { color: #9090d0; }
+        .pe-label {
+            position: absolute; bottom: 3px; right: 5px;
+            font-size: 8px; color: #252540;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .pe.active .pe-label { color: #404068; }
+
+        /* Data badges */
+        .badge {
+            position: absolute; border-radius: 5px;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px; font-weight: 600;
+            pointer-events: none; z-index: 10;
+            transition: left 0.35s cubic-bezier(0.4,0,0.2,1),
+                        top 0.35s cubic-bezier(0.4,0,0.2,1),
+                        opacity 0.25s ease;
+        }
+        .badge-a {
+            width: 32px; height: 20px;
+            background: linear-gradient(135deg, #00c8ff 0%, #0090cc 100%);
+            color: #fff; box-shadow: 0 1px 5px rgba(0,200,255,0.25);
+        }
+        .badge-b {
+            width: 32px; height: 20px;
+            background: linear-gradient(135deg, #ffaa33 0%, #cc8000 100%);
+            color: #fff; box-shadow: 0 1px 5px rgba(255,170,51,0.25);
+        }
+
+        /* Grid labels */
+        .grid-label {
+            position: absolute;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px; pointer-events: none;
+        }
+        .grid-label.row-l { color: rgba(0,170,255,0.35); }
+        .grid-label.col-l { color: rgba(255,150,0,0.35); }
+
+        /* === MATRICES PANEL === */
+        .matrices-panel {
+            display: flex; justify-content: center; align-items: center;
+            gap: 16px; margin-bottom: 14px; flex-wrap: wrap;
+        }
+        .matrix-display { text-align: center; }
+        .matrix-title {
+            font-size: 12px; font-weight: 600; color: #606078; margin-bottom: 4px;
+        }
+        .matrix-bracket {
+            display: inline-flex;
+            border-left: 2px solid #353550; border-right: 2px solid #353550;
+            border-radius: 3px; padding: 3px 1px;
+        }
+        .matrix-table { border-collapse: separate; border-spacing: 0; }
+        .matrix-table td {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; font-weight: 500;
+            padding: 2px 7px; text-align: center; min-width: 26px; color: #8888a0;
+        }
+        .matrix-table .a-v { color: #50b8e8; }
+        .matrix-table .b-v { color: #e8a030; }
+        .matrix-table .c-pending { color: #303048; }
+        .matrix-table .c-partial { color: #c8c830; }
+        .matrix-table .c-done { color: #40d870; }
+        .matrix-op {
+            font-size: 20px; color: #353550; font-weight: 300;
+            padding-top: 16px;
+        }
+
+        /* === INFO PANEL === */
+        .info-panel {
+            text-align: center; padding: 10px 16px;
+            background: rgba(8,8,20,0.4);
+            border: 1px solid rgba(35,35,70,0.15);
+            border-radius: 10px; font-size: 12px; color: #606078;
+            margin-bottom: 10px; min-height: 40px;
+        }
+        .info-panel strong { color: #9090b0; }
+        .info-panel .hl { color: #8080e0; }
+        .info-panel .ok { color: #40d870; font-weight: 600; }
+
+        .keyboard-hint {
+            text-align: center; font-size: 10px; color: #252540;
+        }
+        .keyboard-hint kbd {
+            display: inline-block; padding: 1px 4px;
+            background: rgba(20,20,45,0.5);
+            border: 1px solid rgba(40,40,80,0.25);
+            border-radius: 3px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px; color: #404060;
+        }
+
+        @keyframes pe-pulse {
+            0%,100% { box-shadow: 0 0 15px rgba(100,100,255,0.12); }
+            50%     { box-shadow: 0 0 25px rgba(100,100,255,0.22); }
+        }
+        .pe.active { animation: pe-pulse 1.6s ease-in-out infinite; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <header>
+        <h1>Systolic Array Visualizer</h1>
+        <p>Matrix multiplication wavefront pattern</p>
+    </header>
+
+    <div class="controls">
+        <div class="control-group">
+            <span class="control-label">Size</span>
+            <button class="size-btn" data-n="2" onclick="initSize(2)">2</button>
+            <button class="size-btn active" data-n="3" onclick="initSize(3)">3</button>
+            <button class="size-btn" data-n="4" onclick="initSize(4)">4</button>
+        </div>
+        <div class="control-group">
+            <button class="step-btn" id="btn-start" onclick="goStart()" title="Reset (R)">⏮</button>
+            <button class="step-btn" id="btn-back" onclick="stepBack()" title="Step back (←)">◀</button>
+            <span class="cycle-display" id="cycle-display">0 / 6</span>
+            <button class="step-btn" id="btn-fwd" onclick="stepFwd()" title="Step forward (→)">▶</button>
+            <button class="step-btn" id="btn-end" onclick="goEnd()" title="Jump to end">⏭</button>
+        </div>
+        <div class="control-group">
+            <button class="play-btn" id="btn-play" onclick="togglePlay()" title="Play / Pause (Space)">▶</button>
+        </div>
+        <div class="control-group speed-control">
+            <span class="control-label">Speed</span>
+            <input type="range" min="0.2" max="2.0" step="0.1" value="0.8"
+                   id="speed-slider" oninput="setSpeed(parseFloat(this.value))">
+            <span class="speed-value" id="speed-val">0.8s</span>
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="legend-swatch a"></div> A values →</div>
+        <div class="legend-item"><div class="legend-swatch b"></div> B values ↓</div>
+        <div class="legend-item"><div class="legend-swatch pe"></div> Active PE</div>
+        <div class="legend-item"><div class="legend-swatch done"></div> Complete</div>
+    </div>
+
+    <div id="viz-wrapper" class="viz-wrapper"></div>
+
+    <div class="matrices-panel" id="matrices-panel">
+        <div class="matrix-display">
+            <div class="matrix-title">A</div>
+            <div class="matrix-bracket" id="mat-a"></div>
+        </div>
+        <div class="matrix-op">×</div>
+        <div class="matrix-display">
+            <div class="matrix-title">B</div>
+            <div class="matrix-bracket" id="mat-b"></div>
+        </div>
+        <div class="matrix-op">=</div>
+        <div class="matrix-display">
+            <div class="matrix-title">C</div>
+            <div class="matrix-bracket" id="mat-c"></div>
+        </div>
+    </div>
+
+    <div id="info-panel" class="info-panel"></div>
+
+    <div class="keyboard-hint">
+        <kbd>←</kbd><kbd>→</kbd> step &nbsp;
+        <kbd>Space</kbd> play/pause &nbsp;
+        <kbd>R</kbd> reset &nbsp;
+        <kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> size
+    </div>
+</div>
+
+<script>
+// ========== CONFIG ==========
+const CELL = 78, GAP = 8, STRIDE = CELL + GAP;
+const BW = 32, BH = 20, PAD = 24;
+
+const DEFAULTS = {
+    2: { A: [[2,1],[1,3]], B: [[1,2],[3,1]] },
+    3: { A: [[1,0,2],[3,1,0],[0,2,1]], B: [[2,3,1],[1,0,2],[0,1,3]] },
+    4: { A: [[1,2,0,1],[0,1,2,3],[2,0,1,0],[1,3,0,2]], B: [[2,0,1,3],[0,3,1,0],[1,0,2,1],[3,1,0,2]] }
+};
+
+// ========== STATE ==========
+const S = { n:3, cycle:0, maxCycle:0, playing:false, speed:0.8, A:null, B:null, intId:null };
+let vizW, peEls, aEls, bEls, cycleDisp, playBtn;
+
+// ========== HELPERS ==========
+function el(parent, cls, styles, text) {
+    const d = document.createElement('div');
+    d.className = cls;
+    Object.assign(d.style, styles);
+    if (text !== undefined) d.textContent = text;
+    parent.appendChild(d);
+    return d;
+}
+
+function gx() { return PAD + S.n * STRIDE; }
+function gy() { return PAD + S.n * STRIDE; }
+
+// Accumulator state for PE(i,j) at current cycle
+function accInfo(i, j) {
+    const kDone = Math.max(0, Math.min(S.cycle - i - j + 1, S.n));
+    let sum = 0;
+    for (let k = 0; k < kDone; k++) sum += S.A[i][k] * S.B[k][j];
+    const k = S.cycle - i - j;
+    const active = k >= 0 && k < S.n;
+    return { value: sum, kDone, active, done: kDone >= S.n && !active };
+}
+
+// ========== INIT ==========
+function initSize(n) {
+    stopPlay();
+    S.n = n; S.cycle = 0; S.maxCycle = 3*n - 2;
+    S.A = DEFAULTS[n].A; S.B = DEFAULTS[n].B;
+    document.querySelectorAll('.size-btn').forEach(b =>
+        b.classList.toggle('active', +b.dataset.n === n));
+    buildViz();
+    render();
+}
+
+function buildViz() {
+    vizW = document.getElementById('viz-wrapper');
+    vizW.innerHTML = '';
+    const cols = 2*S.n, rows = 2*S.n;
+    vizW.style.width  = (cols * STRIDE + PAD*2) + 'px';
+    vizW.style.height = (rows * STRIDE + PAD*2) + 'px';
+    const ox = gx(), oy = gy(), n = S.n;
+
+    // Track lines
+    for (let i = 0; i < n; i++)
+        el(vizW, 'h-track', { left: PAD+'px', top: (oy+i*STRIDE+CELL/2)+'px',
+            width: (cols*STRIDE)+'px' });
+    for (let j = 0; j < n; j++)
+        el(vizW, 'v-track', { left: (ox+j*STRIDE+CELL/2)+'px', top: PAD+'px',
+            height: (rows*STRIDE)+'px' });
+
+    // Row / col labels
+    for (let i = 0; i < n; i++)
+        el(vizW, 'grid-label row-l', { left:(ox-18)+'px', top:(oy+i*STRIDE+CELL/2-6)+'px' }, 'r'+i);
+    for (let j = 0; j < n; j++)
+        el(vizW, 'grid-label col-l', { left:(ox+j*STRIDE+CELL/2-6)+'px', top:(oy-16)+'px' }, 'c'+j);
+
+    // PE cells
+    peEls = [];
+    for (let i = 0; i < n; i++) {
+        peEls[i] = [];
+        for (let j = 0; j < n; j++) {
+            const pe = document.createElement('div');
+            pe.className = 'pe';
+            pe.style.left = (ox + j*STRIDE) + 'px';
+            pe.style.top  = (oy + i*STRIDE) + 'px';
+            pe.innerHTML = '<span class="pe-value zero">0</span>' +
+                '<span class="pe-op"></span>' +
+                '<span class="pe-label">' + i + ',' + j + '</span>';
+            vizW.appendChild(pe);
+            peEls[i][j] = pe;
+        }
+    }
+
+    // A badges (flow right)
+    aEls = [];
+    for (let i = 0; i < n; i++) {
+        aEls[i] = [];
+        for (let k = 0; k < n; k++) {
+            const b = document.createElement('div');
+            b.className = 'badge badge-a';
+            b.textContent = S.A[i][k];
+            b.title = 'A['+i+']['+k+'] = '+S.A[i][k];
+            b.style.opacity = '0';
+            vizW.appendChild(b);
+            aEls[i][k] = b;
+        }
+    }
+
+    // B badges (flow down)
+    bEls = [];
+    for (let k = 0; k < n; k++) {
+        bEls[k] = [];
+        for (let j = 0; j < n; j++) {
+            const b = document.createElement('div');
+            b.className = 'badge badge-b';
+            b.textContent = S.B[k][j];
+            b.title = 'B['+k+']['+j+'] = '+S.B[k][j];
+            b.style.opacity = '0';
+            vizW.appendChild(b);
+            bEls[k][j] = b;
+        }
+    }
+}
+
+// ========== RENDER ==========
+function render() {
+    const n = S.n, t = S.cycle, ox = gx(), oy = gy();
+
+    // PEs
+    for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+            const info = accInfo(i, j);
+            const pe = peEls[i][j];
+            const k = t - i - j;
+            pe.classList.toggle('active', info.active);
+            pe.classList.toggle('done', info.done);
+            const vEl = pe.querySelector('.pe-value');
+            vEl.textContent = info.kDone > 0 ? info.value : '0';
+            vEl.classList.toggle('zero', info.kDone === 0);
+            const oEl = pe.querySelector('.pe-op');
+            oEl.textContent = info.active ? S.A[i][k]+'×'+S.B[k][j] : '';
+        }
+    }
+
+    // A badges
+    for (let i = 0; i < n; i++) {
+        for (let k = 0; k < n; k++) {
+            const b = aEls[i][k];
+            const col = t - i - k;
+            b.style.left = (ox + col*STRIDE + 2) + 'px';
+            b.style.top  = (oy + i*STRIDE + (CELL-BH)/2) + 'px';
+            if (col < -n || col > n)       b.style.opacity = '0';
+            else if (col >= 0 && col < n)  b.style.opacity = '1';
+            else                           b.style.opacity = '0.45';
+        }
+    }
+
+    // B badges
+    for (let k = 0; k < n; k++) {
+        for (let j = 0; j < n; j++) {
+            const b = bEls[k][j];
+            const row = t - j - k;
+            b.style.left = (ox + j*STRIDE + (CELL-BW)/2) + 'px';
+            b.style.top  = (oy + row*STRIDE + 2) + 'px';
+            if (row < -n || row > n)       b.style.opacity = '0';
+            else if (row >= 0 && row < n)  b.style.opacity = '1';
+            else                           b.style.opacity = '0.45';
+        }
+    }
+
+    // Controls state
+    cycleDisp.textContent = t + ' / ' + S.maxCycle;
+    document.getElementById('btn-back').disabled = t <= 0;
+    document.getElementById('btn-fwd').disabled  = t >= S.maxCycle;
+    document.getElementById('btn-start').disabled = t <= 0;
+    document.getElementById('btn-end').disabled   = t >= S.maxCycle;
+
+    renderMatrices();
+    renderInfo();
+}
+
+function renderMatrices() {
+    const n = S.n;
+    const td = (v, cls) => '<td class="'+cls+'">'+v+'</td>';
+    const makeTable = (mat, cls) => {
+        let h = '<table class="matrix-table">';
+        for (let i = 0; i < n; i++) {
+            h += '<tr>';
+            for (let j = 0; j < n; j++) h += td(mat[i][j], cls);
+            h += '</tr>';
+        }
+        return h + '</table>';
+    };
+    document.getElementById('mat-a').innerHTML = makeTable(S.A, 'a-v');
+    document.getElementById('mat-b').innerHTML = makeTable(S.B, 'b-v');
+
+    let ch = '<table class="matrix-table">';
+    for (let i = 0; i < n; i++) {
+        ch += '<tr>';
+        for (let j = 0; j < n; j++) {
+            const info = accInfo(i, j);
+            const cls = info.done ? 'c-done' : info.kDone > 0 ? 'c-partial' : 'c-pending';
+            ch += td(info.kDone > 0 ? info.value : '—', cls);
+        }
+        ch += '</tr>';
+    }
+    ch += '</table>';
+    document.getElementById('mat-c').innerHTML = ch;
+}
+
+function renderInfo() {
+    const n = S.n, t = S.cycle, ip = document.getElementById('info-panel');
+    let active = 0, done = 0, macs = 0;
+    for (let i = 0; i < n; i++)
+        for (let j = 0; j < n; j++) {
+            const info = accInfo(i, j);
+            if (info.active) active++;
+            if (info.done || (info.kDone >= n)) done++;
+            macs += info.kDone;
+        }
+    const total = n*n*n;
+    if (done === n*n) {
+        ip.innerHTML = '<span class="ok">✓ Complete!</span> All ' + n*n +
+            ' outputs computed (' + total + ' MACs).';
+    } else {
+        let ops = [];
+        for (let i = 0; i < n; i++)
+            for (let j = 0; j < n; j++) {
+                const k = t-i-j;
+                if (k >= 0 && k < n)
+                    ops.push('C['+i+']['+j+']+='+S.A[i][k]+'×'+S.B[k][j]);
+            }
+        ip.innerHTML = '<strong>Cycle '+t+'</strong> · ' +
+            '<span class="hl">'+active+'</span> active PE'+(active!==1?'s':'') +
+            ' · '+done+'/'+n*n+' done · '+macs+'/'+total+' MACs' +
+            (ops.length && ops.length <= 8 ? '<br>'+ops.join(' · ') : '');
+    }
+}
+
+// ========== CONTROLS ==========
+function stepFwd()  { if (S.cycle < S.maxCycle) { S.cycle++; render(); } }
+function stepBack() { if (S.cycle > 0) { S.cycle--; render(); } }
+function goStart()  { S.cycle = 0; render(); }
+function goEnd()    { S.cycle = S.maxCycle; render(); }
+
+function togglePlay() {
+    if (S.playing) stopPlay();
+    else {
+        S.playing = true;
+        playBtn.textContent = '⏸'; playBtn.classList.add('playing');
+        S.intId = setInterval(() => {
+            if (S.cycle < S.maxCycle) { S.cycle++; render(); }
+            else stopPlay();
+        }, S.speed * 1000);
+    }
+}
+function stopPlay() {
+    S.playing = false;
+    if (S.intId) { clearInterval(S.intId); S.intId = null; }
+    if (playBtn) { playBtn.textContent = '▶'; playBtn.classList.remove('playing'); }
+}
+function setSpeed(v) {
+    S.speed = v;
+    document.getElementById('speed-val').textContent = v.toFixed(1)+'s';
+    if (S.playing) { stopPlay(); togglePlay(); }
+}
+
+// ========== EVENTS ==========
+document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    switch(e.key) {
+        case 'ArrowRight': e.preventDefault(); stepFwd(); break;
+        case 'ArrowLeft':  e.preventDefault(); stepBack(); break;
+        case ' ':          e.preventDefault(); togglePlay(); break;
+        case 'r': case 'R': goStart(); break;
+        case '2': initSize(2); break;
+        case '3': initSize(3); break;
+        case '4': initSize(4); break;
+    }
+});
+
+// ========== BOOT ==========
+document.addEventListener('DOMContentLoaded', () => {
+    cycleDisp = document.getElementById('cycle-display');
+    playBtn = document.getElementById('btn-play');
+    initSize(3);
+});
+</script>
+</body>
+</html>

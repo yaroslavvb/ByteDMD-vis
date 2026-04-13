@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimal Matrix-Vector Visualizer (Spatial Computer)</title>
+    <meta name="description" content="Interactive visualization of O(N^2) energy matrix-vector multiplication on a spatial computer">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #06061a;
+            color: #c0c0e0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 24px 16px;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 50% 0%, rgba(40,40,120,0.15) 0%, transparent 60%),
+                linear-gradient(rgba(20,20,60,0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(20,20,60,0.04) 1px, transparent 1px);
+            background-size: 100% 100%, 50px 50px, 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #app {
+            position: relative; z-index: 1;
+            max-width: 880px; width: 100%;
+        }
+
+        /* === HEADER === */
+        header { text-align: center; margin-bottom: 20px; }
+        header h1 {
+            font-size: 26px; font-weight: 700;
+            background: linear-gradient(135deg, #00e0a0 0%, #60c0ff 50%, #a0a0ff 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; letter-spacing: -0.5px;
+        }
+        header p { font-size: 13px; color: #505068; margin-top: 4px; }
+
+        /* === CONTROLS === */
+        .controls {
+            display: flex; align-items: center; justify-content: center;
+            gap: 14px; flex-wrap: wrap; margin-bottom: 14px;
+            padding: 10px 18px;
+            background: rgba(12,12,30,0.6);
+            border: 1px solid rgba(50,50,100,0.15);
+            border-radius: 14px;
+            backdrop-filter: blur(8px);
+        }
+        .control-group { display: flex; align-items: center; gap: 5px; }
+        .control-label {
+            font-size: 10px; color: #505068;
+            text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+            margin-right: 2px;
+        }
+        .size-btn, .step-btn {
+            width: 34px; height: 30px;
+            border: 1px solid rgba(70,70,140,0.3);
+            background: rgba(18,18,45,0.5); color: #707088;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px; font-weight: 600; border-radius: 7px;
+            cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .size-btn:hover, .step-btn:hover {
+            background: rgba(35,35,70,0.6);
+            border-color: rgba(90,90,180,0.4); color: #a0a0c0;
+        }
+        .size-btn.active {
+            background: rgba(70,180,180,0.25);
+            border-color: rgba(100,255,255,0.5); color: #c0ffff;
+            box-shadow: 0 0 10px rgba(100,255,255,0.15);
+        }
+        .step-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+        .cycle-display {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; color: #8080a0;
+            min-width: 70px; text-align: center;
+        }
+        .play-btn {
+            width: 34px; height: 30px;
+            border: 1px solid rgba(80,180,80,0.3);
+            background: rgba(15,40,15,0.5); color: #50b050;
+            font-size: 13px; border-radius: 7px; cursor: pointer;
+            transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .play-btn:hover {
+            background: rgba(25,60,25,0.6);
+            border-color: rgba(80,180,80,0.5);
+        }
+        .play-btn.playing {
+            border-color: rgba(180,80,80,0.3);
+            background: rgba(40,15,15,0.5); color: #b05050;
+        }
+        .speed-control { display: flex; align-items: center; gap: 5px; }
+        .speed-control input[type="range"] { width: 70px; accent-color: #66ffaa; }
+        .speed-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px; color: #505068; min-width: 28px;
+        }
+
+        /* === LEGEND === */
+        .legend {
+            display: flex; justify-content: center; gap: 18px;
+            margin-bottom: 14px; font-size: 11px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; color: #606078; }
+        .legend-swatch { width: 12px; height: 12px; border-radius: 3px; }
+        .legend-swatch.x { background: linear-gradient(135deg, #00c8ff, #0088cc); border-radius: 6px; }
+        .legend-swatch.y { background: linear-gradient(135deg, #00e880, #00a050); }
+        .legend-swatch.mul { background: rgba(0, 100, 180, 0.5); border: 1px solid rgba(0, 200, 255, 0.5); }
+        .legend-swatch.acc { background: rgba(0, 180, 50, 0.5); border: 1px solid rgba(0, 255, 100, 0.5); }
+
+        /* === VISUALIZATION === */
+        .viz-wrapper {
+            position: relative; margin: 0 auto 20px;
+            overflow: hidden; border-radius: 16px;
+            background: rgba(8,8,20,0.4);
+            border: 1px solid rgba(40,40,80,0.15);
+        }
+        .h-track {
+            position: absolute; height: 0;
+            border-top: 1px dashed rgba(0,255,100,0.15);
+            pointer-events: none;
+        }
+        .v-track {
+            position: absolute; width: 0;
+            border-left: 1px dashed rgba(0,200,255,0.15);
+            pointer-events: none;
+        }
+        
+        .in-node {
+            position: absolute; width: 30px; height: 30px; border-radius: 15px;
+            border: 2px dashed rgba(0, 200, 255, 0.3);
+            display: flex; align-items: center; justify-content: center;
+            color: rgba(0, 200, 255, 0.4); font-size: 11px; font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .out-node {
+            position: absolute; width: 40px; height: 30px; border-radius: 8px;
+            border: 2px dashed rgba(0, 255, 100, 0.3);
+            display: flex; align-items: center; justify-content: center;
+            color: rgba(0, 255, 100, 0.4); font-size: 12px; font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* PE cells */
+        .pe {
+            position: absolute; width: 78px; height: 78px;
+            background: rgba(16,16,40,0.5);
+            border: 1px solid rgba(50,50,100,0.2);
+            border-radius: 11px;
+            transition: all 0.25s;
+        }
+        .pe-a-val {
+            position: absolute; top: 6px; left: 8px;
+            font-size: 11px; color: #606080; font-family: 'JetBrains Mono', monospace;
+        }
+        .pe-c-val {
+            position: absolute; top: 30px; width: 100%; text-align: center;
+            font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700;
+            transition: color 0.25s;
+        }
+        .pe-label {
+            position: absolute; bottom: 4px; right: 6px;
+            font-size: 9px; color: #303040; font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* PE States */
+        .pe.idle .pe-c-val { color: transparent; }
+        .pe.holding .pe-c-val { color: #606080; }
+        
+        .pe.active-mul {
+            border-color: rgba(0, 200, 255, 0.4);
+            background: rgba(0, 100, 180, 0.2);
+            box-shadow: 0 0 15px rgba(0, 200, 255, 0.15);
+        }
+        .pe.active-mul .pe-c-val { color: #00c8ff; }
+
+        .pe.active-acc {
+            border-color: rgba(0, 255, 100, 0.4);
+            background: rgba(0, 180, 50, 0.2);
+            box-shadow: 0 0 15px rgba(0, 255, 100, 0.15);
+        }
+        .pe.active-acc .pe-c-val { color: #50e880; }
+
+        .pe.active-both {
+            border-color: rgba(0, 255, 200, 0.5);
+            background: rgba(0, 180, 150, 0.25);
+            box-shadow: 0 0 15px rgba(0, 255, 200, 0.2);
+        }
+        .pe.active-both .pe-c-val { color: #50e880; }
+
+        .pe.done {
+            border-color: rgba(60, 60, 80, 0.3);
+            background: rgba(10, 10, 20, 0.4);
+        }
+        .pe.done .pe-c-val { color: #303040; }
+
+        /* Data badges */
+        .badge {
+            position: absolute;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; font-weight: 700;
+            pointer-events: none; z-index: 10;
+            transition: left 0.35s cubic-bezier(0.4,0,0.2,1),
+                        top 0.35s cubic-bezier(0.4,0,0.2,1),
+                        opacity 0.25s ease;
+        }
+        .badge-x {
+            width: 24px; height: 24px; border-radius: 12px;
+            background: linear-gradient(135deg, #00c8ff 0%, #0088cc 100%);
+            color: #fff; box-shadow: 0 1px 5px rgba(0,200,255,0.25);
+            font-size: 11px;
+        }
+        .badge-y {
+            width: 34px; height: 24px; border-radius: 6px;
+            background: linear-gradient(135deg, #00e880 0%, #00a050 100%);
+            color: #102a10; box-shadow: 0 1px 5px rgba(0,255,100,0.25);
+        }
+
+        /* === MATRICES PANEL === */
+        .matrices-panel {
+            display: flex; justify-content: center; align-items: center;
+            gap: 16px; margin-bottom: 14px; flex-wrap: wrap;
+        }
+        .matrix-display { text-align: center; }
+        .matrix-title {
+            font-size: 12px; font-weight: 600; color: #606078; margin-bottom: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .matrix-bracket {
+            display: inline-flex;
+            border-left: 2px solid #353550; border-right: 2px solid #353550;
+            border-radius: 3px; padding: 3px 1px;
+        }
+        .matrix-table { border-collapse: separate; border-spacing: 0; }
+        .matrix-table td {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px; font-weight: 500;
+            padding: 2px 7px; text-align: center; min-width: 26px; color: #8888a0;
+        }
+        .matrix-table .a-v { color: #606080; }
+        .matrix-table .x-v { color: #00c8ff; }
+        .matrix-table .y-pending { color: #303048; }
+        .matrix-table .y-partial { color: #c8c830; }
+        .matrix-table .y-done { color: #50e880; }
+        .matrix-op {
+            font-size: 20px; color: #353550; font-weight: 300;
+            padding-top: 16px;
+        }
+
+        /* === INFO PANEL === */
+        .info-panel {
+            text-align: center; padding: 10px 16px;
+            background: rgba(8,8,20,0.4);
+            border: 1px solid rgba(35,35,70,0.15);
+            border-radius: 10px; font-size: 12px; color: #606078;
+            margin-bottom: 10px; min-height: 40px;
+        }
+        .info-panel strong { color: #9090b0; }
+        .info-panel .ok { color: #40d870; font-weight: 600; }
+
+        .keyboard-hint {
+            text-align: center; font-size: 10px; color: #252540;
+        }
+        .keyboard-hint kbd {
+            display: inline-block; padding: 1px 4px;
+            background: rgba(20,20,45,0.5);
+            border: 1px solid rgba(40,40,80,0.25);
+            border-radius: 3px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px; color: #404060;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <header>
+        <h1>Optimal Matrix-Vector Visualizer</h1>
+        <p>Θ(N²) energy spatial wavefront pipeline (Gianinazzi et al. 2026)</p>
+    </header>
+
+    <div class="controls">
+        <div class="control-group">
+            <span class="control-label">Size</span>
+            <button class="size-btn" data-n="2" onclick="initSize(2)">2</button>
+            <button class="size-btn active" data-n="3" onclick="initSize(3)">3</button>
+            <button class="size-btn" data-n="4" onclick="initSize(4)">4</button>
+        </div>
+        <div class="control-group">
+            <button class="step-btn" id="btn-start" onclick="goStart()" title="Reset (R)">⏮</button>
+            <button class="step-btn" id="btn-back" onclick="stepBack()" title="Step back (←)">◀</button>
+            <span class="cycle-display" id="cycle-display">0 / 6</span>
+            <button class="step-btn" id="btn-fwd" onclick="stepFwd()" title="Step forward (→)">▶</button>
+            <button class="step-btn" id="btn-end" onclick="goEnd()" title="Jump to end">⏭</button>
+        </div>
+        <div class="control-group">
+            <button class="play-btn" id="btn-play" onclick="togglePlay()" title="Play / Pause (Space)">▶</button>
+        </div>
+        <div class="control-group speed-control">
+            <span class="control-label">Speed</span>
+            <input type="range" min="0.2" max="2.0" step="0.1" value="0.8"
+                   id="speed-slider" oninput="setSpeed(parseFloat(this.value))">
+            <span class="speed-value" id="speed-val">0.8s</span>
+        </div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="legend-swatch x"></div> Vector x ↓</div>
+        <div class="legend-item"><div class="legend-swatch y"></div> Params sum y ←</div>
+        <div class="legend-item"><div class="legend-swatch mul"></div> Multiply (O(1))</div>
+        <div class="legend-item"><div class="legend-swatch acc"></div> Accumulate (O(1))</div>
+    </div>
+
+    <div id="viz-wrapper" class="viz-wrapper"></div>
+
+    <div class="matrices-panel" id="matrices-panel">
+        <div class="matrix-display">
+            <div class="matrix-title">A</div>
+            <div class="matrix-bracket" id="mat-a"></div>
+        </div>
+        <div class="matrix-op">×</div>
+        <div class="matrix-display">
+            <div class="matrix-title">x</div>
+            <div class="matrix-bracket" id="vec-x"></div>
+        </div>
+        <div class="matrix-op">=</div>
+        <div class="matrix-display">
+            <div class="matrix-title">y</div>
+            <div class="matrix-bracket" id="vec-y"></div>
+        </div>
+    </div>
+
+    <div id="info-panel" class="info-panel"></div>
+
+    <div class="keyboard-hint">
+        <kbd>←</kbd><kbd>→</kbd> step &nbsp;
+        <kbd>Space</kbd> play/pause &nbsp;
+        <kbd>R</kbd> reset &nbsp;
+        <kbd>2</kbd><kbd>3</kbd><kbd>4</kbd> size
+    </div>
+</div>
+
+<script>
+// ========== CONFIG ==========
+const CELL = 78, GAP = 8, STRIDE = CELL + GAP;
+const PAD = 24;
+
+const DEFAULTS = {
+    2: { A: [[2,1],[1,3]], x: [2, 3] },
+    3: { A: [[1,0,2],[3,1,0],[0,2,1]], x: [2, 1, 3] },
+    4: { A: [[1,2,0,1],[0,1,2,3],[2,0,1,0],[1,3,0,2]], x: [1, 2, 0, 3] }
+};
+
+// ========== STATE ==========
+const S = { n:3, cycle:-1, maxCycle:0, playing:false, speed:0.8, A:null, x:null, yFinal:null, intId:null };
+let vizW, peEls, xEls, yEls, cycleDisp, playBtn;
+
+// ========== HELPERS ==========
+function el(parent, cls, styles, text) {
+    const d = document.createElement('div');
+    d.className = cls;
+    Object.assign(d.style, styles);
+    if (text !== undefined) d.textContent = text;
+    parent.appendChild(d);
+    return d;
+}
+
+function gx() { return PAD + STRIDE + 40; } // offset for output nodes
+function gy() { return PAD + STRIDE; } // offset for input nodes
+
+function peInfo(i, j) {
+    const tPhase1 = i;
+    const tPhase2 = i + S.n - 1 - j;
+    const prod = S.A[i][j] * S.x[j];
+
+    let state = 'waiting';
+    let text = '';
+
+    if (S.cycle < tPhase1) {
+        state = 'idle';
+    } else if (S.cycle === tPhase1 && S.cycle === tPhase2) { // j === S.n - 1
+        state = 'active-both';
+        text = `+ ${prod}`;
+    } else if (S.cycle === tPhase1) {
+        state = 'active-mul';
+        text = `${S.A[i][j]}×${S.x[j]}`;
+    } else if (S.cycle > tPhase1 && S.cycle < tPhase2) {
+        state = 'holding';
+        text = `${prod}`;
+    } else if (S.cycle === tPhase2) {
+        state = 'active-acc';
+        text = `+ ${prod}`;
+    } else {
+        state = 'done';
+        text = '✔';
+    }
+
+    return { state, text, prod };
+}
+
+// ========== INIT ==========
+function initSize(n) {
+    stopPlay();
+    S.n = n; S.cycle = -1; S.maxCycle = 2*n - 1;
+    S.A = DEFAULTS[n].A; S.x = DEFAULTS[n].x;
+    
+    // compute expected y
+    S.yFinal = Array(n).fill(0);
+    for (let i=0; i<n; i++)
+        for (let j=0; j<n; j++)
+            S.yFinal[i] += S.A[i][j] * S.x[j];
+            
+    document.querySelectorAll('.size-btn').forEach(b =>
+        b.classList.toggle('active', +b.dataset.n === n));
+    buildViz();
+    render();
+}
+
+function buildViz() {
+    vizW = document.getElementById('viz-wrapper');
+    vizW.innerHTML = '';
+    const n = S.n;
+    const cols = n + 2; // Output nodes on left, PE grid
+    const rows = n + 1; // Input nodes on top, PE grid
+    
+    vizW.style.width  = (cols * STRIDE + PAD*2) + 'px';
+    vizW.style.height = (rows * STRIDE + PAD*2) + 'px';
+    const ox = gx(), oy = gy();
+
+    // Track lines
+    for (let i = 0; i < n; i++)
+        el(vizW, 'h-track', { left: (ox - STRIDE + CELL/2)+'px', top: (oy+i*STRIDE+CELL/2)+'px',
+            width: ((n)*STRIDE)+'px' });
+    for (let j = 0; j < n; j++)
+        el(vizW, 'v-track', { left: (ox+j*STRIDE+CELL/2)+'px', top: (oy - STRIDE + CELL/2)+'px',
+            height: ((n)*STRIDE)+'px' });
+
+    // Input / Output Nodes
+    for (let j = 0; j < n; j++) {
+        el(vizW, 'in-node', {
+            left: (ox + j * STRIDE + CELL/2 - 15) + 'px',
+            top: (oy - STRIDE + CELL/2 - 15) + 'px'
+        }, 'x' + j);
+    }
+    for (let i = 0; i < n; i++) {
+        el(vizW, 'out-node', {
+            left: (ox - STRIDE + CELL/2 - 20) + 'px',
+            top: (oy + i * STRIDE + CELL/2 - 15) + 'px'
+        }, 'y' + i);
+    }
+
+    // PE cells
+    peEls = [];
+    for (let i = 0; i < n; i++) {
+        peEls[i] = [];
+        for (let j = 0; j < n; j++) {
+            const pe = document.createElement('div');
+            pe.className = 'pe';
+            pe.style.left = (ox + j*STRIDE) + 'px';
+            pe.style.top  = (oy + i*STRIDE) + 'px';
+            pe.innerHTML = `<span class="pe-a-val">A<sub>${i},${j}</sub>=${S.A[i][j]}</span>` +
+                '<span class="pe-c-val zero"></span>' +
+                '<span class="pe-label">' + i + ',' + j + '</span>';
+            vizW.appendChild(pe);
+            peEls[i][j] = pe;
+        }
+    }
+
+    // X badges
+    xEls = [];
+    for (let j = 0; j < n; j++) {
+        const b = document.createElement('div');
+        b.className = 'badge badge-x';
+        b.textContent = S.x[j];
+        vizW.appendChild(b);
+        xEls[j] = b;
+    }
+
+    // Y badges
+    yEls = [];
+    for (let i = 0; i < n; i++) {
+        const b = document.createElement('div');
+        b.className = 'badge badge-y';
+        vizW.appendChild(b);
+        yEls[i] = b;
+    }
+}
+
+// ========== RENDER ==========
+function render() {
+    const n = S.n, t = S.cycle, ox = gx(), oy = gy();
+
+    // PEs
+    for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+            const pe = peEls[i][j];
+            const info = peInfo(i, j);
+            pe.className = 'pe ' + info.state;
+            pe.querySelector('.pe-c-val').textContent = info.text;
+        }
+    }
+
+    // X Badges
+    for (let j = 0; j < n; j++) {
+        const b = xEls[j];
+        if (t === -1) {
+            b.style.top = (oy - STRIDE + CELL/2 - 12) + 'px';
+            b.style.left = (ox + j * STRIDE + CELL/2 - 12) + 'px';
+            b.style.opacity = '1';
+        } else if (t >= 0 && t <= n) {
+            b.style.top = (oy + t * STRIDE + 10) + 'px';
+            b.style.left = (ox + j * STRIDE + CELL - 28) + 'px';
+            b.style.opacity = t === n ? '0' : '1';
+        } else {
+            b.style.opacity = '0';
+        }
+    }
+
+    // Y Badges
+    for (let i = 0; i < n; i++) {
+        const b = yEls[i];
+        const col = n - 1 - (t - i);
+        
+        if (t < i) {
+            b.style.opacity = '0';
+            b.style.top = (oy + i * STRIDE + CELL - 28) + 'px';
+            b.style.left = (ox + (n-1) * STRIDE + CELL/2 - 17) + 'px';
+        } else if (col >= -1) {
+            b.style.opacity = '1';
+            let sum = 0;
+            const cStart = Math.max(0, col);
+            for (let j = n - 1; j >= cStart; j--) sum += S.A[i][j] * S.x[j];
+            b.textContent = sum;
+            
+            if (col === -1) {
+                 b.style.top = (oy + i * STRIDE + CELL/2 - 12) + 'px';
+                 b.style.left = (ox - STRIDE + CELL/2 - 17) + 'px';
+            } else {
+                 b.style.top = (oy + i * STRIDE + CELL - 28) + 'px';
+                 b.style.left = (ox + col * STRIDE + CELL/2 - 17) + 'px';
+            }
+        } else {
+            b.style.opacity = '0';
+            b.style.left = (ox - STRIDE - CELL) + 'px';
+        }
+    }
+
+    // Controls state
+    cycleDisp.textContent = (t < 0 ? 'Init' : t) + ' / ' + S.maxCycle;
+    document.getElementById('btn-back').disabled = t <= -1;
+    document.getElementById('btn-fwd').disabled  = t >= S.maxCycle;
+    document.getElementById('btn-start').disabled = t <= -1;
+    document.getElementById('btn-end').disabled   = t >= S.maxCycle;
+
+    renderMatrices();
+    renderInfo();
+}
+
+function renderMatrices() {
+    const n = S.n, t = S.cycle;
+    const td = (v, cls) => '<td class="'+cls+'">'+v+'</td>';
+    
+    let ah = '<table class="matrix-table">';
+    for (let i = 0; i < n; i++) {
+        ah += '<tr>';
+        for (let j = 0; j < n; j++) ah += td(S.A[i][j], 'a-v');
+        ah += '</tr>';
+    }
+    ah += '</table>';
+    document.getElementById('mat-a').innerHTML = ah;
+
+    let xh = '<table class="matrix-table">';
+    for (let j = 0; j < n; j++) xh += '<tr>' + td(S.x[j], 'x-v') + '</tr>';
+    xh += '</table>';
+    document.getElementById('mat-x').innerHTML = xh;
+
+    let yh = '<table class="matrix-table">';
+    for (let i = 0; i < n; i++) {
+        yh += '<tr>';
+        const colBadge = n - 1 - (t - i);
+        let val = '—';
+        let cls = 'y-pending';
+        if (colBadge < -1) {
+             val = S.yFinal[i];
+             cls = 'y-done';
+        } else if (t >= i) {
+             let sum = 0;
+             for (let k = n - 1; k >= Math.max(0, colBadge); k--) sum += S.A[i][k] * S.x[k];
+             val = sum;
+             cls = 'y-partial';
+        }
+        yh += td(val, cls);
+        yh += '</tr>';
+    }
+    yh += '</table>';
+    document.getElementById('mat-y').innerHTML = yh;
+}
+
+function renderInfo() {
+    const n = S.n, t = S.cycle, ip = document.getElementById('info-panel');
+    if (t === -1) {
+        ip.innerHTML = '<strong>Initial State</strong> · Matrix A is stationary in local memory. Vector x ready for input.';
+        return;
+    }
+    
+    let activeMul = 0;
+    let activeAcc = 0;
+    
+    let routedX = 0; // hops down
+    let routedSum = 0; // hops left
+    
+    for (let c = 0; c <= t; c++) {
+        for (let i = 0; i < n; i++) {
+            for (let j = 0; j < n; j++) {
+                if (c === i) {
+                    if (i < n - 1) routedX++; 
+                }
+                if (c === i + n - 1 - j) {
+                    if (j > 0) routedSum++;
+                }
+            }
+        }
+    }
+    
+    for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+            if (t === i) activeMul++;
+            if (t === i + n - 1 - j) activeAcc++;
+        }
+    }
+    
+    if (t === S.maxCycle) {
+        ip.innerHTML = '<span class="ok">✓ Complete!</span> ' +
+            'Energy Used: ' + (routedX + routedSum) + ' hops ' + 
+            '<span style="opacity:0.7">(Mathematically optimal Θ(N²))</span>';
+    } else {
+        const energyText = 'Comm Energy: ' + (routedX + routedSum) + ' hops';
+        ip.innerHTML = '<strong>Cycle '+t+'</strong> &nbsp;&nbsp;|&nbsp;&nbsp; ' +
+            '<span style="color:#00c8ff">'+activeMul+' Muls</span> &nbsp; ' +
+            '<span style="color:#50e880;margin-right:15px">'+activeAcc+' Accs</span> ' + 
+            energyText;
+    }
+}
+
+// ========== CONTROLS ==========
+function stepFwd()  { if (S.cycle < S.maxCycle) { S.cycle++; render(); } }
+function stepBack() { if (S.cycle > -1) { S.cycle--; render(); } }
+function goStart()  { S.cycle = -1; render(); }
+function goEnd()    { S.cycle = S.maxCycle; render(); }
+
+function togglePlay() {
+    if (S.playing) stopPlay();
+    else {
+        S.playing = true;
+        playBtn.textContent = '⏸'; playBtn.classList.add('playing');
+        S.intId = setInterval(() => {
+            if (S.cycle < S.maxCycle) { S.cycle++; render(); }
+            else stopPlay();
+        }, S.speed * 1000);
+    }
+}
+function stopPlay() {
+    S.playing = false;
+    if (S.intId) { clearInterval(S.intId); S.intId = null; }
+    if (playBtn) { playBtn.textContent = '▶'; playBtn.classList.remove('playing'); }
+}
+function setSpeed(v) {
+    S.speed = v;
+    document.getElementById('speed-val').textContent = v.toFixed(1)+'s';
+    if (S.playing) { stopPlay(); togglePlay(); }
+}
+
+// ========== EVENTS ==========
+document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    switch(e.key) {
+        case 'ArrowRight': e.preventDefault(); stepFwd(); break;
+        case 'ArrowLeft':  e.preventDefault(); stepBack(); break;
+        case ' ':          e.preventDefault(); togglePlay(); break;
+        case 'r': case 'R': goStart(); break;
+        case '2': initSize(2); break;
+        case '3': initSize(3); break;
+        case '4': initSize(4); break;
+    }
+});
+
+// ========== BOOT ==========
+document.addEventListener('DOMContentLoaded', () => {
+    cycleDisp = document.getElementById('cycle-display');
+    playBtn = document.getElementById('btn-play');
+    initSize(3);
+});
+</script>
+</body>
+</html>
