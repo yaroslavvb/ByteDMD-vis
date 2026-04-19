@@ -497,14 +497,14 @@ function buildSVG() {
         // Geom
         let [sx, sy] = depthScreen(d);
         s += `<circle cx="${sx}" cy="${sy}" r="22" fill="rgba(56,189,248,0.02)" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.3" id="slot-${d}"/>`;
-        s += `<text x="${sx}" y="${sy + 36}" text-anchor="middle" fill="#38bdf8" font-family="JetBrains Mono" font-size="10" font-weight="600" opacity="0.5">gm=${d}</text>`;
+        s += `<text x="${sx}" y="${sy + 36}" text-anchor="middle" fill="#38bdf8" font-family="JetBrains Mono" font-size="10" font-weight="600" opacity="0.5">idx=${d}</text>`;
 
         // Arg
         let [ax, ay] = depthScreen(-d);
         if (d <= 5) {
             s += `<circle cx="${ax}" cy="${ay}" r="22" fill="rgba(251,191,36,0.02)" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="5,4" opacity="0.3" id="slot--${d}"/>`;
         }
-        s += `<text x="${ax}" y="${ay - 28}" text-anchor="middle" fill="#fbbf24" font-family="JetBrains Mono" font-size="10" font-weight="600" opacity="${d<=5? 0.5 : 0.15}">ar=${d}</text>`;
+        s += `<text x="${ax}" y="${ay - 28}" text-anchor="middle" fill="#fbbf24" font-family="JetBrains Mono" font-size="10" font-weight="600" opacity="${d<=5? 0.5 : 0.15}">idx=${d}</text>`;
     }
 
     // Processor diamond (ALU)
