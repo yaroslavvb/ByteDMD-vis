@@ -242,8 +242,8 @@
 <body>
 <div id="app">
     <header>
-        <h1>Manhattan Diamond Model</h1>
-        <div class="subtitle">Two-Stack Architecture Trace of myfunc(a, b, c, d, e)</div>
+        <h1>Geometric Stack</h1>
+        <div class="subtitle">estimating data movement cost of myfunc(a, b, c, d, e)</div>
     </header>
 
     <div class="controls">
@@ -263,7 +263,7 @@
         <div class="side-panel">
             <div class="side-title">Live Memory State</div>
             <table class="stack-table" id="stack-table">
-                <thead><tr><th>Stack</th><th>Loc</th><th>Var</th><th>(x,y)</th><th>DMD</th></tr></thead>
+                <thead><tr><th>Loc</th><th>Var</th><th>Cost</th></tr></thead>
                 <tbody id="stack-tbody"></tbody>
             </table>
             <div class="formula-panel">
@@ -287,7 +287,7 @@
 // GEOMETRY — Manhattan Diamond (Two Stacks)
 // ============================================================
 const CELL = 55;
-const NUM_SLOTS = 12;
+const NUM_SLOTS = 9;
 
 let PROC_SX, PROC_SY;
 
@@ -620,10 +620,8 @@ function renderState() {
         const def = V[e.id];
         
         rows += `<tr class="${cls}">
-            <td>${sType}</td>
-            <td>= ${dVal}</td>
+            <td>${sType}=${dVal}</td>
             <td><span class="var-chip" style="background:${def.dot}"></span>${def.label}</td>
-            <td>(${gx > 0 ? '+'+gx : gx}, ${ySign}${gyRaw})</td>
             <td>${cost}</td>
         </tr>`;
     });
