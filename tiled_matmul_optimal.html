@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimal Tiled Matmul Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #080811;
+            color: #c0c0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 50% -20%, rgba(60, 40, 180, 0.15) 0%, transparent 60%),
+                linear-gradient(rgba(20,20,60,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(20,20,60,0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #app {
+            position: relative; z-index: 1;
+            max-width: 1400px; width: 100%;
+        }
+
+        header { text-align: center; margin-bottom: 24px; }
+        header h1 {
+            font-size: 28px; font-weight: 700;
+            background: linear-gradient(135deg, #a0a0ff 0%, #60c0ff 50%, #00e0a0 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; letter-spacing: -0.5px;
+        }
+        header p { font-size: 14px; color: #707090; margin-top: 6px; }
+
+        .toolbar {
+            display: flex; align-items: center; justify-content: center;
+            gap: 16px; flex-wrap: wrap; margin-bottom: 24px;
+            padding: 12px 20px;
+            background: rgba(15,15,35,0.6);
+            border: 1px solid rgba(60,60,120,0.2);
+            border-radius: 16px;
+            backdrop-filter: blur(12px);
+        }
+
+        .control-group { display: flex; align-items: center; gap: 8px; }
+        .control-label {
+            font-size: 11px; color: #606080;
+            text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+        }
+        
+        button, select {
+            background: rgba(25,25,55,0.5); border: 1px solid rgba(80,80,160,0.3);
+            color: #d0d0f0; font-family: 'Inter', sans-serif;
+            font-size: 13px; font-weight: 500; border-radius: 8px;
+            padding: 6px 12px; cursor: pointer; transition: all 0.2s;
+            outline: none;
+        }
+        button:hover, select:hover {
+            background: rgba(40,40,80,0.6); border-color: rgba(100,100,200,0.5);
+        }
+        select { appearance: none; padding-right: 24px; }
+        
+        .btn-icon {
+            width: 36px; height: 32px; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'JetBrains Mono', monospace; font-size: 14px;
+        }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .btn-primary { background: rgba(60,100,250,0.2); border-color: rgba(100,140,255,0.4); color: #a0c0ff; }
+        .btn-primary:hover { background: rgba(60,100,250,0.4); border-color: rgba(100,140,255,0.6); }
+
+        .telemetry {
+            display: flex; justify-content: center; gap: 24px; margin-bottom: 32px;
+        }
+        .stat-card {
+            background: rgba(15,15,35,0.6); border: 1px solid rgba(60,60,120,0.2);
+            padding: 16px 24px; border-radius: 12px;
+            display: flex; flex-direction: column; align-items: center;
+            min-width: 160px;
+        }
+        .stat-label { font-size: 11px; color: #707090; text-transform: uppercase; font-weight: 600; letter-spacing: 1px; margin-bottom: 6px; }
+        .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700; color: #e0e0ff; }
+        .stat-sub { font-size: 11px; color: #505075; margin-top: 4px; }
+
+        .stat-card.highlight .stat-value { color: #00e0a0; text-shadow: 0 0 12px rgba(0,224,160,0.3); }
+
+        .workspace {
+            display: flex; gap: 32px; justify-content: center;
+            align-items: stretch;
+            flex-wrap: wrap;
+        }
+
+        .panel {
+            background: rgba(12,12,25,0.5);
+            border: 1px solid rgba(50,50,90,0.2);
+            border-radius: 16px; padding: 24px;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .panel-title {
+            font-size: 13px; font-weight: 600; color: #8080a0; 
+            letter-spacing: 0.5px; margin-bottom: 24px; text-transform: uppercase;
+        }
+
+        .matrices-container {
+            display: flex; gap: 24px; align-items: center;
+        }
+        
+        .matrix-wrapper {
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .matrix-label { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #9090b0; margin-bottom: 12px; }
+        
+        .matrix {
+            display: grid; gap: 2px;
+            padding: 8px; border: 1px solid rgba(60,60,100,0.3);
+            border-radius: 8px; background: rgba(5,5,15,0.8);
+        }
+
+        .cell {
+            width: 24px; height: 24px;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'JetBrains Mono', monospace; font-size: 10px;
+            border-radius: 3px; background: rgba(30,30,50,0.5);
+            color: #505070; transition: all 0.15s;
+        }
+        
+        /* Cell States */
+        .cell.active-a { background: rgba(0, 160, 255, 0.4); color: #afff; border: 1px solid rgba(0, 160, 255, 0.7); box-shadow: 0 0 8px rgba(0,160,255,0.4); }
+        .cell.active-b { background: rgba(255, 140, 0, 0.4); color: #ffd; border: 1px solid rgba(255, 140, 0, 0.7); box-shadow: 0 0 8px rgba(255,140,0,0.4); }
+        .cell.active-c { background: rgba(0, 220, 120, 0.4); color: #cffc; border: 1px solid rgba(0, 220, 120, 0.7); box-shadow: 0 0 8px rgba(0,220,120,0.4); }
+        .cell.active-tmp { background: rgba(220, 0, 120, 0.4); color: #fcc; border: 1px solid rgba(220, 0, 120, 0.7); box-shadow: 0 0 8px rgba(220,0,120,0.4); }
+        .cell.written-c { background: rgba(0, 220, 120, 0.15); color: #40d080; }
+
+        .op { font-size: 20px; color: #404060; }
+
+        /* Fast Memory Area */
+        .fast-memory-panel { position: relative; }
+        .fast-memory-panel::before {
+            content: '';
+            position: absolute; inset: 0;
+            border-radius: 16px;
+            box-shadow: inset 0 0 40px rgba(0,180,255,0.05);
+            pointer-events: none;
+        }
+        .fast-memory-layout {
+            display: flex; gap: 40px; align-items: flex-start;
+        }
+        .registers {
+            display: flex; flex-direction: column; gap: 20px; align-items: center;
+        }
+
+        .slider-control { display: flex; align-items: center; gap: 8px;}
+        .slider-control input[type="range"] { width: 80px; accent-color: #60a0ff; }
+
+        .step-info {
+            margin-top: 32px; font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; color: #8080a0; padding: 12px 20px;
+            background: rgba(20,20,40,0.5); border-radius: 8px;
+            border-left: 3px solid #60a0ff; max-width: 800px; text-align: left;
+            min-height: 44px;
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <h1>Optimal Tiled Matmul</h1>
+        <p>Visualizing the register-blocked, B-row stationary memory layout</p>
+    </header>
+
+    <div class="toolbar">
+        <div class="control-group">
+            <span class="control-label">Size (N)</span>
+            <select id="size-select" onchange="runSimulation()">
+                <option value="4" selected>4x4</option>
+                <option value="8">8x8</option>
+                <option value="16">16x16</option>
+            </select>
+        </div>
+        <div class="control-group" id="tile-size-group">
+            <span class="control-label">Tile Size (T)</span>
+            <select id="tile-select" onchange="runSimulation()">
+                <option value="2" selected>2</option>
+                <option value="4">4</option>
+            </select>
+        </div>
+
+        <div class="control-group" style="margin-left: 16px;">
+            <button class="btn-icon" onclick="reset()" title="Reset">⏮</button>
+            <button class="btn-icon" id="btn-prev" onclick="stepPrev()" title="Step Back">◀</button>
+            <button class="btn-icon" id="btn-next" onclick="stepNext()" title="Step Forward">▶</button>
+            <button class="btn-icon btn-primary" id="btn-play" onclick="togglePlay()" title="Play/Pause">▶</button>
+        </div>
+        
+        <div class="control-group slider-control" style="margin-left: 16px;">
+            <span class="control-label">Speed</span>
+            <input type="range" id="speed-slider" min="10" max="1000" value="800" oninput="updateSpeed()">
+        </div>
+    </div>
+
+    <div class="telemetry">
+        <div class="stat-card">
+            <div class="stat-label">Main Memory Loads</div>
+            <div class="stat-value" id="stat-loads">0</div>
+            <div class="stat-sub">Words read from A & B</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">MAC Operations</div>
+            <div class="stat-value" id="stat-macs">0</div>
+            <div class="stat-sub">Multiply-Accumulates</div>
+        </div>
+        <div class="stat-card highlight">
+            <div class="stat-label">Compute / Mem Ratio</div>
+            <div class="stat-value" id="stat-ratio">0.00</div>
+            <div class="stat-sub">Arithmetic Intensity (MACs / Load)</div>
+        </div>
+    </div>
+
+    <div class="workspace">
+        <div class="panel">
+            <div class="panel-title">Main Memory (Global)</div>
+            <div class="matrices-container">
+                <div class="matrix-wrapper">
+                    <div class="matrix-label">Matrix A</div>
+                    <div class="matrix" id="mat-a"></div>
+                </div>
+                <div class="op">×</div>
+                <div class="matrix-wrapper">
+                    <div class="matrix-label">Matrix B</div>
+                    <div class="matrix" id="mat-b"></div>
+                </div>
+                <div class="op">=</div>
+                <div class="matrix-wrapper">
+                    <div class="matrix-label">Matrix C</div>
+                    <div class="matrix" id="mat-c"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel fast-memory-panel">
+            <div class="panel-title">Fast Memory (Registers & L1 Scratchpad)</div>
+            
+            <div class="fast-memory-layout">
+                <div class="registers">
+                    <div class="matrix-wrapper">
+                        <div class="matrix-label">Scalar c_A</div>
+                        <div class="matrix" id="sram-cA"></div>
+                    </div>
+                    
+                    <div class="matrix-wrapper">
+                        <div class="matrix-label">Vector c_B</div>
+                        <div class="matrix" id="sram-cB"></div>
+                    </div>
+
+                    <div class="matrix-wrapper" style="margin-top: 20px;">
+                        <div class="matrix-label">ALU tmp</div>
+                        <div class="matrix" id="sram-tmp"></div>
+                    </div>
+                </div>
+                
+                <div class="op" style="margin-top: 60px;">→</div>
+                
+                <div class="matrix-wrapper">
+                    <div class="matrix-label">L1 Scratchpad sC (Blocks: 2)</div>
+                    <div class="matrix" id="sram-sC"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="step-info" id="step-info">Simulation ready. Press Play or Step Forward.</div>
+
+</div>
+
+<script>
+    // State
+    let N = 4;
+    let T = 2;
+    let blocks = 2;
+    let steps = [];
+    let currentStepIdx = -1;
+    let playing = false;
+    let playInterval = null;
+    let speedMs = 200;
+
+    let C_real = []; // To track fully computed values
+    let sC_internal = []; // To track internal scratchpad values
+
+    // DOM Elements
+    const matA = document.getElementById('mat-a');
+    const matB = document.getElementById('mat-b');
+    const matC = document.getElementById('mat-c');
+    const sramCA = document.getElementById('sram-cA');
+    const sramCB = document.getElementById('sram-cB');
+    const sramTmp = document.getElementById('sram-tmp');
+    const sramSC = document.getElementById('sram-sC');
+    const stepInfo = document.getElementById('step-info');
+
+    // Stats
+    let totalLoads = 0;
+    let totalMacs = 0;
+
+    function buildGrid(container, rows, cols, cellClassFunc) {
+        container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        container.innerHTML = '';
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                if (cellClassFunc) cellClassFunc(cell, r, c);
+                cell.id = `${container.id}-${r}-${c}`;
+                container.appendChild(cell);
+            }
+        }
+    }
+
+    function initUI() {
+        N = parseInt(document.getElementById('size-select').value);
+        T = parseInt(document.getElementById('tile-select').value);
+        
+        // 2 blocks default. Cap T if needed.
+        if (T > N) T = N;
+        blocks = 2;
+        if (blocks * T > N) blocks = Math.floor(N / T);
+        if (blocks === 0) blocks = 1;
+
+        buildGrid(matA, N, N);
+        buildGrid(matB, N, N);
+        buildGrid(matC, N, N, (cell) => { cell.textContent = '0'; });
+
+        buildGrid(sramCA, 1, 1);
+        buildGrid(sramCB, 1, T);
+        buildGrid(sramTmp, 1, 1);
+        buildGrid(sramSC, blocks * T, T, (cell) => { cell.textContent = '0'; });
+
+        C_real = Array(N).fill(0).map(() => Array(N).fill(0));
+        sC_internal = Array(blocks * T).fill(0).map(() => Array(T).fill(0));
+        
+        totalLoads = 0;
+        totalMacs = 0;
+        currentStepIdx = -1;
+        updateStats();
+        clearHighlights();
+    }
+
+    function generateOptimalSteps() {
+        steps = [];
+        for (let bj = 0; bj < N; bj += T) {
+            for (let bi_start = 0; bi_start < N; bi_start += blocks * T) {
+                
+                let sC_reset_coords = [];
+                for(let r=0; r<blocks*T; r++) {
+                    for(let c=0; c<T; c++) sC_reset_coords.push([r,c]);
+                }
+
+                for (let bk = 0; bk < N; bk += T) {
+                    for (let kk = 0; kk < Math.min(T, N - bk); kk++) {
+                        
+                        // Stream row of B into c_B
+                        let b_load_coords = [];
+                        let cB_coords = [];
+                        for (let jj = 0; jj < Math.min(T, N - bj); jj++) {
+                            b_load_coords.push([bk + kk, bj + jj]);
+                            cB_coords.push([0, jj]);
+                        }
+                        
+                        steps.push({
+                            type: 'load_B',
+                            desc: `Stream row chunk of B [row ${bk+kk}, cols ${bj}..${Math.min(N-1, bj+T-1)}] into L1 Vector (c_B)`,
+                            b_coords: b_load_coords,
+                            cB_coords: cB_coords,
+                            sC_reset_coords: (bk === 0 && kk === 0) ? sC_reset_coords : [],
+                            loads: b_load_coords.length,
+                            macs: 0
+                        });
+
+                        // Accumulate across multiple vertical tiles
+                        for (let bi = bi_start; bi < Math.min(N, bi_start + blocks * T); bi += T) {
+                            let local_bi = Math.floor((bi - bi_start) / T);
+                            
+                            for (let ii = 0; ii < Math.min(T, N - bi); ii++) {
+                                // Load 1 element of A into c_A
+                                steps.push({
+                                    type: 'load_A',
+                                    desc: `Load scalar from A[${bi+ii}, ${bk+kk}] into Scalar Reg (c_A)`,
+                                    a_coords: [[bi+ii, bk+kk]],
+                                    cA_coords: [[0, 0]],
+                                    loads: 1,
+                                    macs: 0
+                                });
+
+                                // Perform MACs mapping cA to cB[jj]
+                                for (let jj = 0; jj < Math.min(T, N - bj); jj++) {
+                                    let is_first_mac = (bk === 0 && kk === 0);
+                                    let sC_coord = [local_bi * T + ii, jj];
+                                    
+                                    steps.push({
+                                        type: 'mac',
+                                        desc: `Multiply c_A by c_B[${jj}] → tmp, then accumulate into sC[${sC_coord[0]}, ${sC_coord[1]}]`,
+                                        cA_coords: [[0,0]],
+                                        cB_coords: [[0,jj]],
+                                        tmp_coords: [[0,0]],
+                                        sC_coords: [sC_coord],
+                                        loads: 0,
+                                        macs: 1,
+                                        is_first_mac: is_first_mac,
+                                        actual_c_coords: [bi+ii, bj+jj],
+                                        sc_actual_coords: sC_coord
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Flush sC blocks to Main Memory C
+                let sC_reads = [];
+                let c_writes = [];
+                for (let bi = bi_start; bi < Math.min(N, bi_start + blocks * T); bi += T) {
+                    let local_bi = Math.floor((bi - bi_start) / T);
+                    for (let ii = 0; ii < Math.min(T, N - bi); ii++) {
+                        for (let jj = 0; jj < Math.min(T, N - bj); jj++) {
+                            sC_reads.push([local_bi * T + ii, jj]);
+                            c_writes.push([bi+ii, bj+jj]);
+                        }
+                    }
+                }
+                steps.push({
+                    type: 'flush_C',
+                    desc: `Flush fully computed sC blocks back to Main Memory C`,
+                    sC_coords: sC_reads,
+                    c_coords: c_writes,
+                    loads: 0,
+                    macs: 0
+                });
+            }
+        }
+    }
+
+    function runSimulation() {
+        stopPlay();
+        initUI();
+        generateOptimalSteps();
+        renderStep(-1);
+    }
+
+    function updateSpeed() {
+        speedMs = 1010 - parseInt(document.getElementById('speed-slider').value);
+        if (playing) {
+            stopPlay();
+            play();
+        }
+    }
+
+    function togglePlay() {
+        if (playing) stopPlay();
+        else play();
+    }
+
+    function play() {
+        if (currentStepIdx >= steps.length - 1) return;
+        playing = true;
+        const btn = document.getElementById('btn-play');
+        btn.textContent = '⏸';
+        btn.title = 'Pause';
+        
+        playInterval = setInterval(() => {
+            if (currentStepIdx < steps.length - 1) {
+                stepNext();
+            } else {
+                stopPlay();
+            }
+        }, speedMs);
+    }
+
+    function stopPlay() {
+        playing = false;
+        clearInterval(playInterval);
+        const btn = document.getElementById('btn-play');
+        btn.textContent = '▶';
+        btn.title = 'Play';
+    }
+
+    function reset() {
+        stopPlay();
+        currentStepIdx = -1;
+        totalLoads = 0;
+        totalMacs = 0;
+        C_real = Array(N).fill(0).map(() => Array(N).fill(0));
+        sC_internal = Array(blocks * T).fill(0).map(() => Array(T).fill(0));
+        renderStep(currentStepIdx);
+        updateStats();
+    }
+
+    function stepNext() {
+        if (currentStepIdx < steps.length - 1) {
+            currentStepIdx++;
+            const st = steps[currentStepIdx];
+            totalLoads += st.loads;
+            totalMacs += st.macs;
+            
+            if(st.type === 'mac') {
+                 let sc_r = st.sc_actual_coords[0];
+                 let sc_c = st.sc_actual_coords[1];
+                 if (st.is_first_mac) {
+                     sC_internal[sc_r][sc_c] = 1; 
+                 } else {
+                     sC_internal[sc_r][sc_c] += 1;
+                 }
+                 C_real[st.actual_c_coords[0]][st.actual_c_coords[1]] += 1;
+            }
+
+            renderStep(currentStepIdx, true);
+        }
+    }
+
+    function stepPrev() {
+        if (currentStepIdx >= 0) {
+            const st = steps[currentStepIdx];
+            totalLoads -= st.loads;
+            totalMacs -= st.macs;
+
+            if(st.type === 'mac') {
+                 let sc_r = st.sc_actual_coords[0];
+                 let sc_c = st.sc_actual_coords[1];
+                 if (st.is_first_mac) {
+                     sC_internal[sc_r][sc_c] = 0; 
+                 } else {
+                     sC_internal[sc_r][sc_c] -= 1;
+                 }
+                 C_real[st.actual_c_coords[0]][st.actual_c_coords[1]] -= 1;
+            }
+
+            currentStepIdx--;
+            renderStep(currentStepIdx, false);
+        }
+    }
+
+    function clearHighlights() {
+        document.querySelectorAll('.cell').forEach(c => {
+            c.classList.remove('active-a', 'active-b', 'active-c', 'active-tmp');
+        });
+        
+        let ca = document.getElementById(`sram-cA-0-0`);
+        if (ca) ca.textContent = '';
+        
+        for(let c=0; c<T; c++) {
+            let cb = document.getElementById(`sram-cB-0-${c}`);
+            if (cb) cb.textContent = '';
+        }
+        
+        let tmp = document.getElementById(`sram-tmp-0-0`);
+        if (tmp) tmp.textContent = '';
+    }
+
+    function renderStep(idx, isForward = true) {
+        clearHighlights();
+        
+        if (idx === -1) {
+            stepInfo.textContent = "Simulation ready. Press Play or Step Forward.";
+            updateStats();
+            // rebuild main memory display
+            for(let r=0; r<N; r++) {
+                for(let c=0; c<N; c++) {
+                    document.getElementById(`mat-c-${r}-${c}`).textContent = '0';
+                    document.getElementById(`mat-c-${r}-${c}`).classList.remove('written-c');
+                }
+            }
+            for(let r=0; r<blocks*T; r++) {
+                for(let c=0; c<T; c++) {
+                    let cell = document.getElementById(`sram-sC-${r}-${c}`);
+                    if(cell) cell.textContent = '0';
+                }
+            }
+            return;
+        }
+
+        const st = steps[idx];
+        stepInfo.textContent = `[Step ${idx+1}/${steps.length}] ${st.desc}`;
+
+        if (st.sC_reset_coords) {
+             st.sC_reset_coords.forEach(([r,c]) => {
+                 let cell = document.getElementById(`sram-sC-${r}-${c}`);
+                 if (cell) cell.textContent = '0';
+             });
+        }
+
+        // Highlight Main Memory
+        if (st.a_coords) st.a_coords.forEach(([r,c]) => document.getElementById(`mat-a-${r}-${c}`).classList.add('active-a'));
+        if (st.b_coords) st.b_coords.forEach(([r,c]) => document.getElementById(`mat-b-${r}-${c}`).classList.add('active-b'));
+        if (st.c_coords) st.c_coords.forEach(([r,c]) => document.getElementById(`mat-c-${r}-${c}`).classList.add('active-c'));
+        
+        // Highlight Fast Memory
+        if (st.cA_coords) st.cA_coords.forEach(([r,c]) => document.getElementById(`sram-cA-${r}-${c}`).classList.add('active-a'));
+        if (st.cB_coords) st.cB_coords.forEach(([r,c]) => document.getElementById(`sram-cB-${r}-${c}`).classList.add('active-b'));
+        if (st.sC_coords) st.sC_coords.forEach(([r,c]) => document.getElementById(`sram-sC-${r}-${c}`).classList.add('active-c'));
+        if (st.tmp_coords) st.tmp_coords.forEach(([r,c]) => document.getElementById(`sram-tmp-${r}-${c}`).classList.add('active-tmp'));
+
+        // Values logic
+        if (st.type === 'load_B') {
+             st.cB_coords.forEach(([r,c]) => {
+                 let cell = document.getElementById(`sram-cB-${r}-${c}`);
+                 if(cell) cell.textContent = 'B';
+             });
+             let ca = document.getElementById(`sram-cA-0-0`);
+             if (ca) {
+                 // attempt to persist A visually if it was loaded
+                 // technically it stays but let's keep it simple
+             }
+        } else if (st.type === 'load_A') {
+             let ca = document.getElementById(`sram-cA-0-0`);
+             if (ca) ca.textContent = 'A';
+             
+             for(let c=0; c<T; c++) {
+                 let cb = document.getElementById(`sram-cB-0-${c}`);
+                 if (cb) cb.textContent = 'B';
+             }
+        } else if (st.type === 'mac') {
+             let ca = document.getElementById(`sram-cA-0-0`);
+             if (ca) ca.textContent = 'A';
+             
+             for(let c=0; c<T; c++) {
+                 let cb = document.getElementById(`sram-cB-0-${c}`);
+                 if (cb) cb.textContent = 'B';
+             }
+             
+             let tmp = document.getElementById(`sram-tmp-0-0`);
+             if (tmp) tmp.textContent = '*';
+
+             let sc_cell = document.getElementById(`sram-sC-${st.sc_actual_coords[0]}-${st.sc_actual_coords[1]}`);
+             if (sc_cell) sc_cell.textContent = sC_internal[st.sc_actual_coords[0]][st.sc_actual_coords[1]];
+        }
+
+        // Replay write steps up to current step
+        for(let r=0; r<N; r++) {
+            for(let c=0; c<N; c++) {
+                document.getElementById(`mat-c-${r}-${c}`).textContent = '0';
+                document.getElementById(`mat-c-${r}-${c}`).classList.remove('written-c');
+            }
+        }
+        
+        for(let r=0; r<blocks*T; r++) {
+            for(let c=0; c<T; c++) {
+                 let cell = document.getElementById(`sram-sC-${r}-${c}`);
+                 // re-evaluate sC internal fully based on replay, but our sC_internal array holds the truth at current state
+                 if (cell && st.type !== 'mac') {
+                     // don't overwrite if it's currently active in mac
+                     cell.textContent = sC_internal[r][c];
+                 }
+            }
+        }
+
+        for(let k=0; k<=idx; k++) {
+             if (steps[k].type === 'flush_C') {
+                 steps[k].c_coords.forEach(([r,c]) => {
+                     let cell = document.getElementById(`mat-c-${r}-${c}`);
+                     cell.textContent = C_real[r][c];
+                     cell.classList.add('written-c');
+                 });
+             }
+        }
+        
+        if (st.type === 'flush_C') {
+             st.c_coords.forEach(([r,c]) => {
+                 let cell = document.getElementById(`mat-c-${r}-${c}`);
+                 cell.classList.add('active-c');
+             });
+        }
+
+        updateStats();
+        
+        document.getElementById('btn-prev').disabled = idx === -1;
+        document.getElementById('btn-next').disabled = idx === steps.length - 1;
+    }
+
+    function updateStats() {
+        document.getElementById('stat-loads').textContent = totalLoads;
+        document.getElementById('stat-macs').textContent = totalMacs;
+        
+        const ratio = totalLoads > 0 ? (totalMacs / totalLoads).toFixed(2) : "0.00";
+        document.getElementById('stat-ratio').textContent = ratio;
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            stepNext();
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            stepPrev();
+        } else if (e.key === ' ') {
+            e.preventDefault();
+            togglePlay();
+        }
+    });
+
+    // Init
+    runSimulation();
+    updateSpeed();
+</script>
+</body>
+</html>

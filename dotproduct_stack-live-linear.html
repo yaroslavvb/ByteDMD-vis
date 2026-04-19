@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dot Product — LRU Geometric Stack</title>
+    <meta name="description" content="Animated visualization of ByteDMD LRU stack dynamics for dot product computation on a Manhattan spatial computer">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+                *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f8fafc;
+            color: #0f172a;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 24px 16px;
+            background-image:
+                radial-gradient(ellipse at 50% 0%, rgba(99,102,241,0.07) 0%, transparent 50%),
+                linear-gradient(rgba(0,0,0,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,0.02) 1px, transparent 1px);
+            background-size: 100% 100%, 36px 36px, 36px 36px;
+        }
+
+        #app {
+            position: relative; z-index: 1;
+            max-width: 900px; width: 100%;
+        }
+
+        /* --- Header --- */
+        header { text-align: center; margin-bottom: 16px; }
+        header h1 {
+            font-size: 1.9rem; font-weight: 800;
+            background: linear-gradient(135deg, #0284c7 0%, #7c3aed 50%, #db2777 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; letter-spacing: -0.5px;
+        }
+        .subtitle {
+            font-size: 0.82rem; color: #64748b; margin-top: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* --- Legend --- */
+        .legend {
+            display: flex; justify-content: center; gap: 18px;
+            margin-bottom: 14px; flex-wrap: wrap; font-size: 0.72rem;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; color: #475569; }
+        .legend-swatch { width: 13px; height: 13px; border-radius: 50%; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+
+        /* --- Controls --- */
+        .controls {
+            display: flex; align-items: center; justify-content: center;
+            gap: 12px; margin-bottom: 18px;
+            padding: 8px 16px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+        .step-btn {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            color: #64748b; padding: 7px 16px; border-radius: 7px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem; cursor: pointer;
+            transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .step-btn:hover:not(:disabled) {
+            border-color: #8b5cf6; color: #1e293b;
+            box-shadow: 0 0 10px rgba(139,92,246,0.15);
+            background: #ffffff;
+        }
+        .step-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .step-display {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem; color: #475569;
+            min-width: 70px; text-align: center;
+            font-weight: 600;
+        }
+        .play-btn {
+            width: 34px; height: 30px;
+            border: 1px solid #86efac;
+            background: #f0fdf4; color: #16a34a;
+            font-size: 13px; border-radius: 7px; cursor: pointer;
+            transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .play-btn:hover {
+            background: #dcfce7;
+            border-color: #4ade80;
+        }
+        .play-btn.playing {
+            border-color: #fca5a5;
+            background: #fff1f2; color: #e11d48;
+        }
+
+        /* --- Main Layout --- */
+        .main-row {
+            display: flex; gap: 16px; margin-bottom: 16px;
+            align-items: stretch;
+        }
+
+        /* --- Viz Container --- */
+        .viz-container {
+            position: relative;
+            flex: 1;
+            height: 480px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+        .viz-container svg {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+        }
+        #chips-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+        }
+
+        /* --- Variable Chips --- */
+        .chip {
+            position: absolute;
+            width: 50px; height: 50px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700; font-size: 0.95rem;
+            color: white;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+            z-index: 10;
+            transform: translate(-50%, -50%);
+            transition:
+                left 0.65s cubic-bezier(0.34, 1.56, 0.64, 1),
+                top 0.65s cubic-bezier(0.34, 1.56, 0.64, 1),
+                opacity 0.4s ease,
+                box-shadow 0.4s ease,
+                transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            pointer-events: none;
+        }
+        .chip.at-proc {
+            width: 36px; height: 36px;
+            font-size: 0.75rem;
+            opacity: 0.9;
+        }
+        .chip.hidden {
+            width: 20px; height: 20px;
+            opacity: 0;
+        }
+
+        /* --- Side Table --- */
+        .side-panel {
+            width: 230px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 14px;
+            display: flex; flex-direction: column;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+        .side-title {
+            font-size: 0.75rem; font-weight: 700;
+            color: #7c3aed; text-transform: uppercase;
+            letter-spacing: 0.5px; margin-bottom: 10px;
+            text-align: center;
+        }
+        .stack-table {
+            width: 100%; border-collapse: collapse;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+        }
+        .stack-table th {
+            color: #64748b; font-weight: 700; padding: 4px 6px;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: center; font-size: 0.68rem;
+            text-transform: uppercase; letter-spacing: 0.3px;
+        }
+        .stack-table td {
+            padding: 5px 6px; text-align: center;
+            border-bottom: 1px solid #f8fafc;
+            color: #475569;
+        }
+        .stack-table tr.active-row td {
+            color: #0f172a; font-weight: 600;
+            background: #f3e8ff;
+        }
+        .stack-table tr.read-row td {
+            color: #e11d48; font-weight: 600;
+            background: #ffe4e6;
+        }
+        .stack-table .var-chip {
+            display: inline-block;
+            width: 8px; height: 8px; border-radius: 50%;
+            margin-right: 4px; vertical-align: middle;
+        }
+        .formula-panel {
+            margin-top: auto;
+            padding-top: 12px;
+            border-top: 1px solid #e2e8f0;
+            text-align: center;
+        }
+        .formula {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem; color: #475569;
+        }
+        .formula strong { color: #9333ea; }
+
+        /* --- Timeline --- */
+        .timeline-container {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 12px 20px 20px 20px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+        .timeline-container .side-title { margin-bottom: 8px; }
+
+        /* --- Info Panel --- */
+        .info-panel {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 14px 20px; margin-bottom: 12px;
+            min-height: 80px;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+        .info-label {
+            font-size: 0.95rem; font-weight: 700;
+            color: #9333ea; margin-bottom: 4px;
+        }
+        .info-desc {
+            font-size: 0.85rem; color: #475569; line-height: 1.55;
+        }
+        .info-desc strong { color: #0284c7; }
+        .info-desc em { color: #d97706; font-style: normal; font-weight: 600; }
+        .cost-line {
+            margin-top: 8px; display: flex; gap: 16px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 600;
+        }
+        .cost-badge {
+            background: #f3e8ff;
+            border: 1px solid #d8b4fe;
+            border-radius: 5px; padding: 2px 10px; color: #7e22ce;
+        }
+        .cost-delta {
+            color: #e11d48;
+        }
+
+        /* --- Keyboard hint --- */
+        .keyboard-hint {
+            text-align: center; font-size: 0.65rem; color: #64748b;
+        }
+        .keyboard-hint kbd {
+            display: inline-block; padding: 1px 5px;
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 3px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem; color: #475569;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <header>
+        <h1>LRU Geometric Stack</h1>
+        <div class="subtitle">dot(x, y) = x₀·y₀ + x₁·y₁ + x₂·y₂ + x₃·y₃ — ByteDMD Trace</div>
+    </header>
+
+    <div class="legend">
+        <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg,#38bdf8,#0077b6)"></div> Input x</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg,#34d399,#059669)"></div> Input y</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg,#fb923c,#dc2626)"></div> Products</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg,#c084fc,#7c3aed)"></div> Partial sums</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg,#a855f7,#ec4899)"></div> Result</div>
+    </div>
+
+    <div class="controls">
+        <button class="step-btn" id="btn-start" onclick="goStart()" title="Reset (R)">⏮</button>
+        <button class="step-btn" id="btn-prev" onclick="prevStep()" title="Previous (←)">◀</button>
+        <span class="step-display" id="step-display">1 / 22</span>
+        <button class="step-btn" id="btn-next" onclick="nextStep()" title="Next (→)">▶</button>
+        <button class="step-btn" id="btn-end" onclick="goEnd()">⏭</button>
+        <button class="play-btn" id="btn-play" onclick="togglePlay()" title="Play / Pause (Space)">▶</button>
+    </div>
+
+    <div class="main-row">
+        <div class="viz-container" id="viz-container">
+            <svg id="grid-svg"></svg>
+            <div id="chips-layer"></div>
+        </div>
+        <div class="side-panel">
+            <div class="side-title">Stack State</div>
+            <table class="stack-table" id="stack-table">
+                <thead><tr><th>Depth</th><th>Var</th><th>Cost</th></tr></thead>
+                <tbody id="stack-tbody"></tbody>
+            </table>
+            <div class="formula-panel">
+                <div class="formula" id="formula-text"></div>
+            </div>
+        </div>
+    </div>
+
+    
+    <div class="timeline-container">
+        <div class="side-title" style="text-align: left;">Memory & Timeline</div>
+        <svg id="timeline-svg" style="width:100%; height:80px; overflow:visible; cursor:pointer;" onclick="handleTimelineClick(event)"></svg>
+    </div>
+
+    <div class="info-panel" id="info-panel">
+        <div class="info-label" id="info-label"></div>
+        <div class="info-desc" id="info-desc"></div>
+        <div class="cost-line">
+            <span class="cost-badge" id="cost-badge"></span>
+            <span class="cost-delta" id="cost-delta"></span>
+        </div>
+    </div>
+
+    <div class="keyboard-hint">
+        <kbd>←</kbd><kbd>→</kbd> step &nbsp;
+        <kbd>Space</kbd> play/pause &nbsp;
+        <kbd>R</kbd> reset
+    </div>
+</div>
+
+<script>
+// ============================================================
+// GEOMETRY — Linear horizontal layout
+// ============================================================
+const CELL = 52;
+const NUM_SLOTS = 9;
+
+// Processor screen coords
+let PROC_SX, PROC_SY;
+
+function isqrtCeil(x) {
+    if (x <= 0) return 0;
+    return Math.floor(Math.sqrt(x - 1)) + 1;
+}
+
+function depthScreen(d) {
+    if (d === 'proc') return [PROC_SX, PROC_SY];
+    // Linear horizontal: processor on the right, stack grows to the left
+    return [PROC_SX - d * CELL, PROC_SY];
+}
+
+// ============================================================
+// VARIABLE DEFINITIONS
+// ============================================================
+const V = {
+    x0:   { label: 'x₀',   bg: 'linear-gradient(135deg,#38bdf8,#0077b6)', shadow: 'rgba(56,189,248,0.35)',  dot: '#38bdf8' },
+    x1:   { label: 'x₁',   bg: 'linear-gradient(135deg,#38bdf8,#0077b6)', shadow: 'rgba(56,189,248,0.35)',  dot: '#38bdf8' },
+    x2:   { label: 'x₂',   bg: 'linear-gradient(135deg,#38bdf8,#0077b6)', shadow: 'rgba(56,189,248,0.35)',  dot: '#38bdf8' },
+    x3:   { label: 'x₃',   bg: 'linear-gradient(135deg,#38bdf8,#0077b6)', shadow: 'rgba(56,189,248,0.35)',  dot: '#38bdf8' },
+    y0:   { label: 'y₀',   bg: 'linear-gradient(135deg,#34d399,#059669)', shadow: 'rgba(52,211,153,0.35)',  dot: '#34d399' },
+    y1:   { label: 'y₁',   bg: 'linear-gradient(135deg,#34d399,#059669)', shadow: 'rgba(52,211,153,0.35)',  dot: '#34d399' },
+    y2:   { label: 'y₂',   bg: 'linear-gradient(135deg,#34d399,#059669)', shadow: 'rgba(52,211,153,0.35)',  dot: '#34d399' },
+    y3:   { label: 'y₃',   bg: 'linear-gradient(135deg,#34d399,#059669)', shadow: 'rgba(52,211,153,0.35)',  dot: '#34d399' },
+    m0:   { label: 'm₀',   bg: 'linear-gradient(135deg,#fb923c,#dc2626)', shadow: 'rgba(251,146,60,0.35)',  dot: '#fb923c' },
+    m1:   { label: 'm₁',   bg: 'linear-gradient(135deg,#fb923c,#dc2626)', shadow: 'rgba(251,146,60,0.35)',  dot: '#fb923c' },
+    m2:   { label: 'm₂',   bg: 'linear-gradient(135deg,#fb923c,#dc2626)', shadow: 'rgba(251,146,60,0.35)',  dot: '#fb923c' },
+    m3:   { label: 'm₃',   bg: 'linear-gradient(135deg,#fb923c,#dc2626)', shadow: 'rgba(251,146,60,0.35)',  dot: '#fb923c' },
+    s01:  { label: 's₀₁',  bg: 'linear-gradient(135deg,#c084fc,#7c3aed)', shadow: 'rgba(192,132,252,0.35)', dot: '#c084fc' },
+    s012: { label: 's₀₁₂', bg: 'linear-gradient(135deg,#c084fc,#7c3aed)', shadow: 'rgba(192,132,252,0.35)', dot: '#c084fc' },
+    z:    { label: 'z',     bg: 'linear-gradient(135deg,#a855f7,#ec4899)', shadow: 'rgba(168,85,247,0.35)',  dot: '#a855f7' },
+};
+
+// ============================================================
+// STATES — From ByteDMD trace_ir output for dot4
+//   vars: depth (number) | 'proc' | undefined (hidden)
+// ============================================================
+const states = [
+    {
+        label: "Initial State",
+        desc: "Vectors <strong>x</strong>=[x₀,x₁,x₂,x₃] and <strong>y</strong>=[y₀,y₁,y₂,y₃] loaded onto the LRU stack.<br>y₃ is most-recently-used (depth 1). x₀ is deepest (depth 8, ring 3).",
+        vars: { x0: 8, x1: 7, x2: 6, x3: 5, y0: 4, y1: 3, y2: 2, y3: 1 },
+        reads: [],
+        cost: 0, delta: 0,
+    },
+    {
+        label: "Step 1A — Highlight x₀, y₀",
+        desc: "Identify x₀ at depth 8 (cost = ⌈√8⌉ = <strong>3</strong>) and y₀ at depth 4 (cost = ⌈√4⌉ = <strong>2</strong>).<br>Cost paths shown in red.",
+        vars: { x0: 8, x1: 7, x2: 6, x3: 5, y0: 4, y1: 3, y2: 2, y3: 1 },
+        reads: [{ id: 'x0', depth: 8 }, { id: 'y0', depth: 4 }],
+        cost: 5, delta: 5,
+    },
+    {
+        label: "Step 1B — Pull into PE",
+        desc: "Variables pulled into processor.<br>Dead variables <em>vaporized</em>. Survivors slide.",
+        vars: { x0: 'proc', x1: 6, x2: 5, x3: 4, y0: 'proc', y1: 3, y2: 2, y3: 1 },
+        reads: [{ id: 'x0', depth: 8 }, { id: 'y0', depth: 4 }],
+        cost: 5, delta: 0,
+    },
+    {
+        label: "Step 1C — Store m₀ = x₀·y₀",
+        desc: "Product <strong>m₀</strong> pushed to depth 1. All survivors pushed outward by 1.",
+        vars: { x1: 7, x2: 6, x3: 5, y1: 4, y2: 3, y3: 2, m0: 1 },
+        reads: [],
+        cost: 5, delta: 0,
+    },
+    {
+        label: "Step 2A — Highlight x₁, y₁",
+        desc: "Identify x₁ at depth 7 (cost = ⌈√7⌉ = <strong>3</strong>) and y₁ at depth 4 (cost = ⌈√4⌉ = <strong>2</strong>).<br>Cost paths shown in red.",
+        vars: { x1: 7, x2: 6, x3: 5, y1: 4, y2: 3, y3: 2, m0: 1 },
+        reads: [{ id: 'x1', depth: 7 }, { id: 'y1', depth: 4 }],
+        cost: 10, delta: 5,
+    },
+    {
+        label: "Step 2B — Pull into PE",
+        desc: "Variables pulled into processor.<br>Dead variables <em>vaporized</em>. Survivors slide.",
+        vars: { x1: 'proc', x2: 5, x3: 4, y1: 'proc', y2: 3, y3: 2, m0: 1 },
+        reads: [{ id: 'x1', depth: 7 }, { id: 'y1', depth: 4 }],
+        cost: 10, delta: 0,
+    },
+    {
+        label: "Step 2C — Store m₁ = x₁·y₁",
+        desc: "Product <strong>m₁</strong> pushed to depth 1. Survivors pushed outward.",
+        vars: { x2: 6, x3: 5, y2: 4, y3: 3, m0: 2, m1: 1 },
+        reads: [],
+        cost: 10, delta: 0,
+    },
+    {
+        label: "Step 3A — Highlight m₀, m₁",
+        desc: "Identify m₀ at depth 2 (cost = ⌈√2⌉ = <strong>2</strong>) and m₁ at depth 1 (cost = ⌈√1⌉ = <strong>1</strong>).<br>Cost paths shown in red.",
+        vars: { x2: 6, x3: 5, y2: 4, y3: 3, m0: 2, m1: 1 },
+        reads: [{ id: 'm0', depth: 2 }, { id: 'm1', depth: 1 }],
+        cost: 13, delta: 3,
+    },
+    {
+        label: "Step 3B — Pull into PE",
+        desc: "Variables pulled into processor.<br>Dead variables <em>vaporized</em>. Survivors slide.",
+        vars: { x2: 4, x3: 3, y2: 2, y3: 1, m0: 'proc', m1: 'proc' },
+        reads: [{ id: 'm0', depth: 2 }, { id: 'm1', depth: 1 }],
+        cost: 13, delta: 0,
+    },
+    {
+        label: "Step 3C — Store s₀₁ = m₀ + m₁",
+        desc: "Partial sum <strong>s₀₁</strong> = x₀y₀ + x₁y₁ pushed to depth 1. Survivors pushed outward.",
+        vars: { x2: 5, x3: 4, y2: 3, y3: 2, s01: 1 },
+        reads: [],
+        cost: 13, delta: 0,
+    },
+    {
+        label: "Step 4A — Highlight x₂, y₂",
+        desc: "Identify x₂ at depth 5 (cost = ⌈√5⌉ = <strong>3</strong>) and y₂ at depth 3 (cost = ⌈√3⌉ = <strong>2</strong>).<br>Cost paths shown in red.",
+        vars: { x2: 5, x3: 4, y2: 3, y3: 2, s01: 1 },
+        reads: [{ id: 'x2', depth: 5 }, { id: 'y2', depth: 3 }],
+        cost: 18, delta: 5,
+    },
+    {
+        label: "Step 4B — Pull into PE",
+        desc: "Variables pulled into processor.<br>Dead variables <em>vaporized</em>. Survivors slide.",
+        vars: { x2: 'proc', x3: 3, y2: 'proc', y3: 2, s01: 1 },
+        reads: [{ id: 'x2', depth: 5 }, { id: 'y2', depth: 3 }],
+        cost: 18, delta: 0,
+    },
+    {
+        label: "Step 4C — Store m₂ = x₂·y₂",
+        desc: "Product <strong>m₂</strong> pushed to depth 1. Survivors pushed outward.",
+        vars: { x3: 4, y3: 3, s01: 2, m2: 1 },
+        reads: [],
+        cost: 18, delta: 0,
+    },
+    {
+        label: "Step 5A — Highlight s₀₁, m₂",
+        desc: "Identify s₀₁ at depth 2 (cost = ⌈√2⌉ = <strong>2</strong>) and m₂ at depth 1 (cost = ⌈√1⌉ = <strong>1</strong>).<br>Cost paths shown in red.",
+        vars: { x3: 4, y3: 3, s01: 2, m2: 1 },
+        reads: [{ id: 's01', depth: 2 }, { id: 'm2', depth: 1 }],
+        cost: 21, delta: 3,
+    },
+    {
+        label: "Step 5B — Pull into PE",
+        desc: "Variables pulled into processor.<br>Dead variables <em>vaporized</em>. Survivors slide.",
+        vars: { x3: 2, y3: 1, s01: 'proc', m2: 'proc' },
+        reads: [{ id: 's01', depth: 2 }, { id: 'm2', depth: 1 }],
+        cost: 21, delta: 0,
+    },
+    {
+        label: "Step 5C — Store s₀₁₂ = s₀₁ + m₂",
+        desc: "Partial sum <strong>s₀₁₂</strong> = x₀y₀ + x₁y₁ + x₂y₂ pushed to depth 1. Survivors pushed outward.",
+        vars: { x3: 3, y3: 2, s012: 1 },
+        reads: [],
+        cost: 21, delta: 0,
+    },
+    {
+        label: "Step 6A — Highlight x₃, y₃",
+        desc: "Identify x₃ at depth 3 (cost = ⌈√3⌉ = <strong>2</strong>) and y₃ at depth 2 (cost = ⌈√2⌉ = <strong>2</strong>).<br>Cost paths shown in red.",
+        vars: { x3: 3, y3: 2, s012: 1 },
+        reads: [{ id: 'x3', depth: 3 }, { id: 'y3', depth: 2 }],
+        cost: 25, delta: 4,
+    },
+    {
+        label: "Step 6B — Pull into PE",
+        desc: "Variables pulled into processor.<br>Dead variables <em>vaporized</em>. Survivors slide.",
+        vars: { x3: 'proc', y3: 'proc', s012: 1 },
+        reads: [{ id: 'x3', depth: 3 }, { id: 'y3', depth: 2 }],
+        cost: 25, delta: 0,
+    },
+    {
+        label: "Step 6C — Store m₃ = x₃·y₃",
+        desc: "Product <strong>m₃</strong> pushed to depth 1. s₀₁₂ pushed to depth 2.",
+        vars: { s012: 2, m3: 1 },
+        reads: [],
+        cost: 25, delta: 0,
+    },
+    {
+        label: "Step 7A — Highlight s₀₁₂, m₃",
+        desc: "Identify s₀₁₂ at depth 2 (cost = ⌈√2⌉ = <strong>2</strong>) and m₃ at depth 1 (cost = ⌈√1⌉ = <strong>1</strong>).<br>Cost paths shown in red.",
+        vars: { s012: 2, m3: 1 },
+        reads: [{ id: 's012', depth: 2 }, { id: 'm3', depth: 1 }],
+        cost: 28, delta: 3,
+    },
+    {
+        label: "Step 7B — Pull into PE",
+        desc: "Variables pulled into processor.<br>Dead variables <em>vaporized</em>. Survivors slide.",
+        vars: { s012: 'proc', m3: 'proc' },
+        reads: [{ id: 's012', depth: 2 }, { id: 'm3', depth: 1 }],
+        cost: 28, delta: 0,
+    },
+    {
+        label: "Final — Store z = x₀y₀ + x₁y₁ + x₂y₂ + x₃y₃",
+        desc: "Dot product result <strong>z</strong> stored at depth 1.<br>Total ByteDMD cost = <strong>28</strong> — the sum of Manhattan distances over all reads.",
+        vars: { z: 1 },
+        reads: [],
+        cost: 28, delta: 0,
+    },
+];
+
+// ============================================================
+
+// ============================================================
+// TIMELINE GRAPH
+// ============================================================
+function renderTimeline() {
+    const svg = document.getElementById('timeline-svg');
+    const rect = svg.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    
+    // Max items for dynamic scaling
+    const maxItems = Math.max(16, ...states.map(s => Object.values(s.vars).filter(v => typeof v === 'number').length));
+    
+    let pathD = "";
+    let sHTML = "";
+    const N = states.length;
+    const stepW = W / Math.max(1, N - 1);
+    
+    for (let i = 0; i < N; i++) {
+        // Count items strictly on stack (numbers)
+        const st = states[i];
+        let items = Object.values(st.vars).filter(v => typeof v === 'number').length;
+        
+        // For visual continuity, elements at 'proc' are also considered 'active' memory,
+        // but strictly speaking, Mattson size is stack size. Let's count 'proc' as memory footprint too
+        let procItems = Object.values(st.vars).filter(v => v === 'proc').length;
+        let totalMem = items + procItems; 
+
+        // Normalized Y coordinate
+        const hNorm = totalMem / maxItems;
+        const cy = H - (hNorm * (H - 20)); // leave top padding
+        const cx = i * stepW;
+        
+        if (i === 0) pathD += `M ${cx} ${cy} `;
+        else pathD += `L ${cx} ${cy} `;
+        
+        // Hover hitbox / interactive column
+        sHTML += `<rect x="${cx - stepW/2}" y="0" width="${stepW}" height="${H}" fill="transparent" style="cursor:pointer;" onmousedown="currentState=${i}; renderState();"/>`;
+        
+        // Data point circle
+        const isActive = (i === currentState);
+        const r = isActive ? 5 : 3;
+        const fill = isActive ? '#00e5ff' : 'rgba(148,163,184,0.5)';
+        const stroke = isActive ? 'rgba(0,229,255,0.4)' : 'none';
+        const sw = isActive ? 4 : 0;
+        
+        sHTML += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" pointer-events="none" />`;
+        
+        // Highlight active step region
+        if (isActive) {
+            sHTML += `<rect x="${cx - stepW/2 + 2}" y="0" width="${stepW - 4}" height="${H}" fill="rgba(0,229,255,0.06)" rx="4" pointer-events="none"/>`;
+            // Label memory
+            sHTML += `<text x="${cx}" y="${cy - 12}" text-anchor="middle" fill="#00e5ff" font-family="JetBrains Mono" font-size="10" font-weight="700">${totalMem}</text>`;
+        }
+    }
+    
+    // Add filled area graph below line
+    let areaPath = pathD + ` L ${W} ${H} L 0 ${H} Z`;
+    
+    const svgContent = `
+        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(148,163,184,0.15)"/>
+            <stop offset="100%" stop-color="rgba(148,163,184,0.0)"/>
+        </linearGradient>
+        <path d="${areaPath}" fill="url(#areaGrad)" pointer-events="none" />
+        <path d="${pathD}" fill="none" stroke="rgba(148,163,184,0.4)" stroke-width="2" pointer-events="none" />
+        ${sHTML}
+    `;
+    svg.innerHTML = svgContent;
+}
+
+// Window resize handler already exists
+
+// ============================================================
+// BUILD SVG
+// ============================================================
+function buildSVG() {
+    const svg = document.getElementById('grid-svg');
+    const container = document.getElementById('viz-container');
+    const rect = container.getBoundingClientRect();
+    const H = rect.height;
+    
+    // Allow horizontal scroll if necessary
+    container.style.overflowX = 'auto';
+    container.style.overflowY = 'hidden';
+
+    // Calculate required width
+    const minW = rect.width;
+    const requiredW = Math.max(minW, 50 + NUM_SLOTS * CELL + 60);
+    
+    // Processor is on the far right of the layout
+    PROC_SX = requiredW - 50;
+    PROC_SY = H / 2 - 20;
+
+    svg.setAttribute('viewBox', `0 0 ${requiredW} ${H}`);
+    svg.style.width = requiredW + 'px';
+    svg.style.height = H + 'px';
+
+    let s = '';
+    let tierLabelsHTML = '';
+
+    // Defs
+    s += `<defs>
+        <marker id="arr" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+            <polygon points="0 0, 7 2.5, 0 5" fill="rgba(148,163,184,0.8)"/>
+        </marker>
+        <marker id="arr-red" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+            <polygon points="0 0, 7 2.5, 0 5" fill="rgba(251,113,133,0.8)"/>
+        </marker>
+    </defs>`;
+
+    // Cost Tier Bands
+    const tiers = [
+        { c: 1, start: 1, end: 1, color: 'rgba(139,92,246,0.2)' },
+        { c: 2, start: 2, end: 4, color: 'rgba(236,72,153,0.15)' },
+        { c: 3, start: 5, end: 9, color: 'rgba(251,191,36,0.12)' },
+        { c: 4, start: 10, end: 16, color: 'rgba(163,230,53,0.1)' },
+    ];
+
+    tiers.forEach(t => {
+        if (t.start > NUM_SLOTS) return;
+        const e = Math.min(t.end, NUM_SLOTS);
+        const [x1] = depthScreen(t.start);
+        const [x2] = depthScreen(e);
+        const startX = x2 - CELL/2;
+        const width = (x1 - x2) + CELL;
+        
+        s += `<rect x="${startX}" y="${PROC_SY - 35}" width="${width}" height="70" rx="12" fill="${t.color}" stroke="${t.color}" stroke-width="2"/>`;
+        
+        // Save the text to a separate variable to render after cost-paths
+        tierLabelsHTML += `<rect x="${startX + width/2 - 50}" y="${PROC_SY - 52}" width="100" height="15" fill="#ffffff" rx="4"/>`;
+        tierLabelsHTML += `<text x="${startX + width/2}" y="${PROC_SY - 41}" text-anchor="middle" fill="${t.color.replace(/\.[0-9]+\)/, '1.0)')}" font-family="JetBrains Mono" font-size="10" font-weight="700">Cost = ${t.c}</text>`;
+    });
+
+    // Processor Box
+    s += `<g>
+        <rect x="${PROC_SX - 20}" y="${PROC_SY - 20}" width="40" height="40" rx="8"
+              fill="#ffffff" stroke="#ec4899" stroke-width="2.5"/>
+        <text x="${PROC_SX}" y="${PROC_SY + 5}" text-anchor="middle" fill="#0f172a"
+              font-family="JetBrains Mono" font-weight="700" font-size="13">PE</text>
+    </g>`;
+
+    // Depth slot circles with labels
+    const slotColor = d => {
+        const r = isqrtCeil(d);
+        if (r === 1) return '#8b5cf6';
+        if (r === 2) return '#ec4899';
+        if (r === 3) return '#fbbf24';
+        return '#a3e635';
+    };
+
+    for (let d = 1; d <= NUM_SLOTS; d++) {
+        const [sx, sy] = depthScreen(d);
+        const c = slotColor(d);
+        // Draw slot circle
+        s += `<circle cx="${sx}" cy="${sy}" r="24" fill="none" stroke="${c}" stroke-width="1.5" stroke-dasharray="4,3" opacity="0.4" id="slot-${d}"/>`;
+        // Draw depth label
+        s += `<text x="${sx}" y="${sy + 42}" text-anchor="middle" fill="${c}" font-family="JetBrains Mono" font-size="10" font-weight="600" opacity="0.6">d=${d}</text>`;
+    }
+    
+    // Line arrows bridging adjacent slots
+    for (let d = 0; d < NUM_SLOTS; d++) {
+        const [x1] = depthScreen(d === 0 ? 'proc' : d);
+        const [x2] = depthScreen(d + 1);
+        s += `<line x1="${x1 - 25}" y1="${PROC_SY}" x2="${x2 + 27}" y2="${PROC_SY}" stroke="rgba(148,163,184,0.3)" stroke-width="2" marker-end="url(#arr)"/>`;
+    }
+
+    // Dynamic cost-path layer
+    s += `<g id="cost-paths"></g>`;
+    
+    // Tier Labels Layer (on top of cost-paths)
+    s += `<g id="tier-labels">${tierLabelsHTML}</g>`;
+
+    svg.innerHTML = s;
+    const cl = document.getElementById('chips-layer');
+    cl.style.width = requiredW + 'px';
+    cl.style.height = H + 'px';
+    
+    requestAnimationFrame(() => {
+        container.scrollLeft = container.scrollWidth;
+    });
+
+}
+
+// ============================================================
+// BUILD CHIPS
+// ============================================================
+const chipEls = {};
+
+function buildChips() {
+    const layer = document.getElementById('chips-layer');
+    layer.innerHTML = '';
+    Object.entries(V).forEach(([id, def]) => {
+        const chip = document.createElement('div');
+        chip.className = 'chip hidden';
+        chip.style.background = def.bg;
+        chip.style.boxShadow = `0 4px 14px ${def.shadow}`;
+        chip.innerHTML = def.label;
+        chip.style.left = PROC_SX + 'px';
+        chip.style.top = PROC_SY + 'px';
+        layer.appendChild(chip);
+        chipEls[id] = chip;
+    });
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+let currentState = 0;
+
+function renderState() {
+    const st = states[currentState];
+
+    // --- Chips ---
+    Object.keys(V).forEach(id => {
+        const chip = chipEls[id];
+        const pos = st.vars[id];
+        if (pos === undefined) {
+            chip.style.left = PROC_SX + 'px';
+            chip.style.top = PROC_SY + 'px';
+            chip.style.opacity = '0';
+            chip.style.boxShadow = `0 0 0 transparent`;
+        } else if (pos === 'proc') {
+            chip.style.left = PROC_SX + 'px';
+            chip.style.top = PROC_SY + 'px';
+            chip.style.opacity = '0.7';
+            chip.style.width = '36px';
+            chip.style.height = '36px';
+            chip.style.fontSize = '0.7rem';
+            chip.style.boxShadow = `0 0 18px ${V[id].shadow}`;
+        } else {
+            const [sx, sy] = depthScreen(pos);
+            chip.style.left = sx + 'px';
+            chip.style.top = sy + 'px';
+            chip.style.opacity = '1';
+            chip.style.width = '44px';
+            chip.style.height = '44px';
+            chip.style.fontSize = '0.8rem';
+            
+            const isHighlighted = st.label.includes('Highlight') && st.reads.some(r => r.id === id);
+            if (isHighlighted) {
+                chip.style.boxShadow = `0 0 0 3px #fb7185, 0 8px 20px ${V[id].shadow}`;
+                chip.style.transform = 'translate(-50%, -50%) scale(1.15)';
+                chip.style.zIndex = '10';
+            } else {
+                chip.style.boxShadow = `0 4px 14px ${V[id].shadow}`;
+                chip.style.transform = 'translate(-50%, -50%) scale(1)';
+                chip.style.zIndex = '1';
+            }
+        }
+    });
+
+    // --- Cost paths (Arched lines) ---
+    const cp = document.getElementById('cost-paths');
+    let pathHTML = '';
+    st.reads.forEach((r, idx) => {
+        const [tx, ty] = depthScreen(r.depth);
+        const cost = isqrtCeil(r.depth);
+        
+        // Draw arc from PROC to Target
+        const heightArc = -40 - (idx * 25); // staggered height for multiple arcs
+        const midX = (PROC_SX + tx) / 2;
+        
+        pathHTML += `<path d="M ${PROC_SX} ${PROC_SY - 25} Q ${midX} ${PROC_SY + heightArc * 2} ${tx} ${ty - 25}" fill="none" stroke="rgba(251,113,133,0.55)" stroke-width="3" marker-end="url(#arr-red)"/>`;
+        
+        // Cost label
+        pathHTML += `<rect x="${midX - 25}" y="${PROC_SY + heightArc - 10}" width="50" height="20" rx="4" fill="#ffffff" stroke="#fb7185" stroke-width="1"/>`;
+        pathHTML += `<text x="${midX}" y="${PROC_SY + heightArc + 3}" text-anchor="middle" fill="#fb7185" font-family="JetBrains Mono" font-size="10" font-weight="700">cost=${cost}</text>`;
+    });
+    cp.innerHTML = pathHTML;
+
+    // --- Highlight accessed slots ---
+    for (let d = 1; d <= NUM_SLOTS; d++) {
+        const el = document.getElementById('slot-' + d);
+        if (!el) continue;
+        const isRead = st.reads.some(r => r.depth === d);
+        el.setAttribute('opacity', isRead ? '0.8' : '0.35');
+        el.setAttribute('stroke-width', isRead ? '2.5' : '1.5');
+    }
+
+    // --- Side table ---
+    const tbody = document.getElementById('stack-tbody');
+    // Collect stack entries sorted by depth
+    const stackEntries = Object.entries(st.vars)
+        .filter(([, v]) => typeof v === 'number')
+        .map(([id, d]) => ({ id, depth: d }))
+        .sort((a, b) => a.depth - b.depth);
+    // Also include read entries
+    const readIds = new Set(st.reads.map(r => r.id));
+
+    let rows = '';
+    // Show occupied + read depths
+    const allEntries = [
+        ...stackEntries.map(e => ({ ...e, type: 'stack' })),
+        ...st.reads.map(r => ({ id: r.id, depth: r.depth, type: 'read' }))
+    ].sort((a, b) => a.depth - b.depth);
+
+    allEntries.forEach(e => {
+        
+        const cost = isqrtCeil(e.depth);
+        const cls = e.type === 'read' ? 'read-row' : 'active-row';
+        const def = V[e.id];
+        rows += `<tr class="${cls}">
+            <td>${e.depth}</td>
+            <td><span class="var-chip" style="background:${def.dot}"></span>${def.label}</td>
+                        <td>${cost}</td>
+        </tr>`;
+    });
+    if (allEntries.length === 0) {
+        rows = `<tr><td colspan="4" style="color:#334155; font-style:italic; padding:12px">empty</td></tr>`;
+    }
+    tbody.innerHTML = rows;
+
+    // --- Formula ---
+    const formulaEl = document.getElementById('formula-text');
+    if (currentState === 0)        formulaEl.innerHTML = '<strong>z</strong> = x₀·y₀ + x₁·y₁ + x₂·y₂ + x₃·y₃';
+    else if (currentState <= 3)    formulaEl.innerHTML = '<strong>m₀</strong> = x₀ · y₀';
+    else if (currentState <= 6)    formulaEl.innerHTML = '<strong>m₁</strong> = x₁ · y₁';
+    else if (currentState <= 9)    formulaEl.innerHTML = '<strong>s₀₁</strong> = m₀ + m₁';
+    else if (currentState <= 12)   formulaEl.innerHTML = '<strong>m₂</strong> = x₂ · y₂';
+    else if (currentState <= 15)   formulaEl.innerHTML = '<strong>s₀₁₂</strong> = s₀₁ + m₂';
+    else if (currentState <= 18)   formulaEl.innerHTML = '<strong>m₃</strong> = x₃ · y₃';
+    else                           formulaEl.innerHTML = '<strong>z</strong> = s₀₁₂ + m₃';
+
+    // --- Info panel ---
+    document.getElementById('info-label').textContent = st.label;
+    document.getElementById('info-desc').innerHTML = st.desc;
+    document.getElementById('cost-badge').textContent = `Total cost: ${st.cost}`;
+    document.getElementById('cost-delta').textContent = st.delta > 0 ? `(+${st.delta} this step)` : '';
+
+    // --- Controls ---
+    
+    // --- Timeline Graph ---
+    renderTimeline();
+
+    document.getElementById('step-display').textContent = `${currentState + 1} / ${states.length}`;
+    document.getElementById('btn-prev').disabled = currentState <= 0;
+    document.getElementById('btn-next').disabled = currentState >= states.length - 1;
+    document.getElementById('btn-start').disabled = currentState <= 0;
+    document.getElementById('btn-end').disabled = currentState >= states.length - 1;
+}
+
+// ============================================================
+// CONTROLS
+// ============================================================
+function nextStep() { if (currentState < states.length - 1) { currentState++; renderState(); } }
+function prevStep() { if (currentState > 0) { currentState--; renderState(); } }
+function goStart() { currentState = 0; renderState(); stopPlay(); }
+function goEnd() { currentState = states.length - 1; renderState(); stopPlay(); }
+
+let playing = false, playTimer = null;
+function togglePlay() {
+    if (playing) stopPlay();
+    else {
+        playing = true;
+        document.getElementById('btn-play').textContent = '⏸';
+        document.getElementById('btn-play').classList.add('playing');
+        playTimer = setInterval(() => {
+            if (currentState < states.length - 1) { currentState++; renderState(); }
+            else stopPlay();
+        }, 1200);
+    }
+}
+function stopPlay() {
+    playing = false;
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    const btn = document.getElementById('btn-play');
+    if (btn) { btn.textContent = '▶'; btn.classList.remove('playing'); }
+}
+
+document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    switch (e.key) {
+        case 'ArrowRight': e.preventDefault(); nextStep(); break;
+        case 'ArrowLeft':  e.preventDefault(); prevStep(); break;
+        case ' ':          e.preventDefault(); togglePlay(); break;
+        case 'r': case 'R': goStart(); break;
+    }
+});
+
+// ============================================================
+// BOOT
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+    buildSVG();
+    buildChips();
+    renderState();
+});
+
+// Rebuild on resize
+window.addEventListener('resize', () => {
+    buildSVG();
+    // Re-position chips immediately (no transition)
+    Object.values(chipEls).forEach(c => c.style.transition = 'none');
+    renderState();
+    requestAnimationFrame(() => {
+        Object.values(chipEls).forEach(c => c.style.transition = '');
+    });
+});
+</script>
+</body>
+</html>

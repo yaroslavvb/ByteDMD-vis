@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiled Matrix Multiplication Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #080811;
+            color: #c0c0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 50% -20%, rgba(60, 40, 180, 0.15) 0%, transparent 60%),
+                linear-gradient(rgba(20,20,60,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(20,20,60,0.03) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #app {
+            position: relative; z-index: 1;
+            max-width: 1400px; width: 100%;
+        }
+
+        header { text-align: center; margin-bottom: 24px; }
+        header h1 {
+            font-size: 28px; font-weight: 700;
+            background: linear-gradient(135deg, #a0a0ff 0%, #60c0ff 50%, #00e0a0 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; letter-spacing: -0.5px;
+        }
+        header p { font-size: 14px; color: #707090; margin-top: 6px; }
+
+        .toolbar {
+            display: flex; align-items: center; justify-content: center;
+            gap: 16px; flex-wrap: wrap; margin-bottom: 24px;
+            padding: 12px 20px;
+            background: rgba(15,15,35,0.6);
+            border: 1px solid rgba(60,60,120,0.2);
+            border-radius: 16px;
+            backdrop-filter: blur(12px);
+        }
+
+        .control-group { display: flex; align-items: center; gap: 8px; }
+        .control-label {
+            font-size: 11px; color: #606080;
+            text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+        }
+        
+        button, select {
+            background: rgba(25,25,55,0.5); border: 1px solid rgba(80,80,160,0.3);
+            color: #d0d0f0; font-family: 'Inter', sans-serif;
+            font-size: 13px; font-weight: 500; border-radius: 8px;
+            padding: 6px 12px; cursor: pointer; transition: all 0.2s;
+            outline: none;
+        }
+        button:hover, select:hover {
+            background: rgba(40,40,80,0.6); border-color: rgba(100,100,200,0.5);
+        }
+        select { appearance: none; padding-right: 24px; }
+        
+        .btn-icon {
+            width: 36px; height: 32px; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'JetBrains Mono', monospace; font-size: 14px;
+        }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .btn-primary { background: rgba(60,100,250,0.2); border-color: rgba(100,140,255,0.4); color: #a0c0ff; }
+        .btn-primary:hover { background: rgba(60,100,250,0.4); border-color: rgba(100,140,255,0.6); }
+
+        .telemetry {
+            display: flex; justify-content: center; gap: 24px; margin-bottom: 32px;
+        }
+        .stat-card {
+            background: rgba(15,15,35,0.6); border: 1px solid rgba(60,60,120,0.2);
+            padding: 16px 24px; border-radius: 12px;
+            display: flex; flex-direction: column; align-items: center;
+            min-width: 160px;
+        }
+        .stat-label { font-size: 11px; color: #707090; text-transform: uppercase; font-weight: 600; letter-spacing: 1px; margin-bottom: 6px; }
+        .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700; color: #e0e0ff; }
+        .stat-sub { font-size: 11px; color: #505075; margin-top: 4px; }
+
+        .stat-card.highlight .stat-value { color: #00e0a0; text-shadow: 0 0 12px rgba(0,224,160,0.3); }
+
+        .workspace {
+            display: flex; gap: 32px; justify-content: center;
+            align-items: stretch;
+            flex-wrap: wrap;
+        }
+
+        .panel {
+            background: rgba(12,12,25,0.5);
+            border: 1px solid rgba(50,50,90,0.2);
+            border-radius: 16px; padding: 24px;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .panel-title {
+            font-size: 13px; font-weight: 600; color: #8080a0; 
+            letter-spacing: 0.5px; margin-bottom: 24px; text-transform: uppercase;
+        }
+
+        .matrices-container {
+            display: flex; gap: 24px; align-items: center;
+        }
+        
+        .matrix-wrapper {
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .matrix-label { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #9090b0; margin-bottom: 12px; }
+        
+        .matrix {
+            display: grid; gap: 1px;
+            padding: 4px; border: 1px solid rgba(60,60,100,0.3);
+            border-radius: 8px; background: rgba(5,5,15,0.8);
+        }
+
+        .cell {
+            width: 15px; height: 15px;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'JetBrains Mono', monospace; font-size: 7px;
+            border-radius: 2px; background: rgba(30,30,50,0.5);
+            color: #505070; transition: all 0.2s;
+        }
+        
+        /* Cell States */
+        .cell.active-a { background: rgba(0, 160, 255, 0.25); color: #80d0ff; border: 1px solid rgba(0, 160, 255, 0.5); }
+        .cell.active-b { background: rgba(255, 140, 0, 0.25); color: #ffd080; border: 1px solid rgba(255, 140, 0, 0.5); }
+        .cell.active-c { background: rgba(0, 220, 120, 0.25); color: #80ffc0; border: 1px solid rgba(0, 220, 120, 0.5); }
+        .cell.written-c { background: rgba(0, 220, 120, 0.1); color: #40c080; }
+
+        .op { font-size: 20px; color: #404060; }
+
+        /* Fast Memory Area */
+        .fast-memory-panel { position: relative; }
+        .fast-memory-panel::before {
+            content: '';
+            position: absolute; inset: 0;
+            border-radius: 16px;
+            box-shadow: inset 0 0 40px rgba(0,180,255,0.05);
+            pointer-events: none;
+        }
+        .sram-container { display: flex; gap: 20px; align-items: center; }
+
+        .slider-control { display: flex; align-items: center; gap: 8px;}
+        .slider-control input[type="range"] { width: 80px; accent-color: #60a0ff; }
+
+        .step-info {
+            margin-top: 32px; font-family: 'JetBrains Mono', monospace;
+            font-size: 12px; color: #8080a0; padding: 12px 20px;
+            background: rgba(20,20,40,0.5); border-radius: 8px;
+            border-left: 3px solid #60a0ff; max-width: 600px; text-align: left;
+            min-height: 40px;
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <h1>Tiled Matrix Multiplication</h1>
+        <p>Visualizing how block tiling improves the compute-to-memory ratio</p>
+    </header>
+
+    <div class="toolbar">
+        <div class="control-group">
+            <span class="control-label">Mode</span>
+            <select id="mode-select" onchange="runSimulation()">
+                <option value="naive">Standard</option>
+                <option value="tiled" selected>Tiled (Blocked)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <span class="control-label">Size (N)</span>
+            <select id="size-select" onchange="runSimulation()">
+                <option value="4">4x4</option>
+                <option value="8" selected>8x8</option>
+                <option value="16">16x16</option>
+            </select>
+        </div>
+        <div class="control-group" id="tile-size-group">
+            <span class="control-label">Tile Size (T)</span>
+            <select id="tile-select" onchange="runSimulation()">
+                <option value="2">2x2</option>
+                <option value="4" selected>4x4</option>
+            </select>
+        </div>
+
+        <div class="control-group" style="margin-left: 16px;">
+            <button class="btn-icon" onclick="reset()" title="Reset">⏮</button>
+            <button class="btn-icon" id="btn-prev" onclick="stepPrev()" title="Step Back">◀</button>
+            <button class="btn-icon" id="btn-next" onclick="stepNext()" title="Step Forward">▶</button>
+            <button class="btn-icon btn-primary" id="btn-play" onclick="togglePlay()" title="Play/Pause">▶</button>
+        </div>
+        
+        <div class="control-group slider-control" style="margin-left: 16px;">
+            <span class="control-label">Speed</span>
+            <input type="range" id="speed-slider" min="10" max="1000" value="700" oninput="updateSpeed()">
+        </div>
+    </div>
+
+    <div class="telemetry">
+        <div class="stat-card">
+            <div class="stat-label">Main Memory Loads</div>
+            <div class="stat-value" id="stat-loads">0</div>
+            <div class="stat-sub">Words read from A & B</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">MAC Operations</div>
+            <div class="stat-value" id="stat-macs">0</div>
+            <div class="stat-sub">Multiply-Accumulates</div>
+        </div>
+        <div class="stat-card highlight">
+            <div class="stat-label">Compute / Mem Ratio</div>
+            <div class="stat-value" id="stat-ratio">0.00</div>
+            <div class="stat-sub">Arithmetic Intensity (MACs / Load)</div>
+        </div>
+    </div>
+
+    <div class="workspace">
+        <div class="panel">
+            <div class="panel-title">Main Memory (Global)</div>
+            <div class="matrices-container">
+                <div class="matrix-wrapper">
+                    <div class="matrix-label">Matrix A</div>
+                    <div class="matrix" id="mat-a"></div>
+                </div>
+                <div class="op">×</div>
+                <div class="matrix-wrapper">
+                    <div class="matrix-label">Matrix B</div>
+                    <div class="matrix" id="mat-b"></div>
+                </div>
+                <div class="op">=</div>
+                <div class="matrix-wrapper">
+                    <div class="matrix-label">Matrix C</div>
+                    <div class="matrix" id="mat-c"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel fast-memory-panel">
+            <div class="panel-title">Fast Memory (SRAM / L1)</div>
+            <div class="sram-container">
+                <div class="matrix-wrapper">
+                    <div class="matrix-label">Tile A</div>
+                    <div class="matrix" id="sram-a"></div>
+                </div>
+                <div class="op">×</div>
+                <div class="matrix-wrapper">
+                    <div class="matrix-label">Tile B</div>
+                    <div class="matrix" id="sram-b"></div>
+                </div>
+                <div class="op">=</div>
+                <div class="matrix-wrapper">
+                    <div class="matrix-label">Tile C (Accumulator)</div>
+                    <div class="matrix" id="sram-c"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="step-info" id="step-info">Simulation ready. Press Play or Step Forward.</div>
+
+</div>
+
+<script>
+    // State
+    let N = 8;
+    let T = 4;
+    let mode = 'tiled';
+    let steps = [];
+    let currentStepIdx = -1;
+    let playing = false;
+    let playInterval = null;
+    let speedMs = 300;
+
+    let C_real = []; // To track fully computed values
+
+    // DOM Elements
+    const matA = document.getElementById('mat-a');
+    const matB = document.getElementById('mat-b');
+    const matC = document.getElementById('mat-c');
+    const sramA = document.getElementById('sram-a');
+    const sramB = document.getElementById('sram-b');
+    const sramC = document.getElementById('sram-c');
+    const stepInfo = document.getElementById('step-info');
+
+    // Stats
+    let totalLoads = 0;
+    let totalMacs = 0;
+
+    function buildGrid(container, rows, cols, cellClassFunc) {
+        container.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        container.innerHTML = '';
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                if (cellClassFunc) cellClassFunc(cell, r, c);
+                // Assign a generic ID for easier lookup
+                cell.id = `${container.id}-${r}-${c}`;
+                container.appendChild(cell);
+            }
+        }
+    }
+
+    function initUI() {
+        N = parseInt(document.getElementById('size-select').value);
+        mode = document.getElementById('mode-select').value;
+        const tileSelectGrp = document.getElementById('tile-size-group');
+        
+        if (mode === 'tiled') {
+            tileSelectGrp.style.display = 'flex';
+            T = parseInt(document.getElementById('tile-select').value);
+            if (T > N) { T = N; document.getElementById('tile-select').value = N; }
+        } else {
+            tileSelectGrp.style.display = 'none';
+            T = 1; // Naive reads 1 element at a time
+        }
+
+        // Initialize empty cells
+        buildGrid(matA, N, N);
+        buildGrid(matB, N, N);
+        buildGrid(matC, N, N, (cell) => { cell.textContent = '0'; });
+
+        // Fast memory sizes based on T
+        const sramSize = mode === 'tiled' ? T : 1;
+        buildGrid(sramA, sramSize, sramSize);
+        buildGrid(sramB, sramSize, sramSize);
+        buildGrid(sramC, sramSize, sramSize, (cell) => { cell.textContent = '0'; });
+
+        C_real = Array(N).fill(0).map(() => Array(N).fill(0));
+        totalLoads = 0;
+        totalMacs = 0;
+        currentStepIdx = -1;
+        updateStats();
+        clearHighlights();
+    }
+
+    function generateNaiveSteps() {
+        steps = [];
+        for (let i = 0; i < N; i++) {
+            for (let j = 0; j < N; j++) {
+                for (let k = 0; k < N; k++) {
+                    steps.push({
+                        type: 'mac',
+                        desc: `Fetch A[${i},${k}] and B[${k},${j}], Compute MAC`,
+                        a_coords: [[i, k]],
+                        b_coords: [[k, j]],
+                        c_coords: [[i, j]],
+                        sram_a_coords: [[0, 0]],
+                        sram_b_coords: [[0, 0]],
+                        sram_c_coords: [[0, 0]],
+                        loads: 2,
+                        macs: 1
+                    });
+                }
+                steps.push({
+                    type: 'write',
+                    desc: `Write C[${i},${j}] to Main Memory`,
+                    c_coords: [[i, j]],
+                    loads: 0,
+                    macs: 0
+                });
+            }
+        }
+    }
+
+    function generateTiledSteps() {
+        steps = [];
+        for (let i0 = 0; i0 < N; i0 += T) {
+            for (let j0 = 0; j0 < N; j0 += T) {
+                // Initialize C_tile accumulation implicitly by starting sequence
+                for (let k0 = 0; k0 < N; k0 += T) {
+                    
+                    // Step: Load Tiles
+                    let a_load_coords = [];
+                    let b_load_coords = [];
+                    for(let r=0; r<T; r++) {
+                        for(let c=0; c<T; c++) {
+                            a_load_coords.push([i0+r, k0+c]);
+                            b_load_coords.push([k0+r, j0+c]);
+                        }
+                    }
+
+                    steps.push({
+                        type: 'load_tile',
+                        desc: `Load A tile [${i0}..${i0+T-1}, ${k0}..${k0+T-1}] and B tile [${k0}..${k0+T-1}, ${j0}..${j0+T-1}] into SRAM`,
+                        a_coords: a_load_coords,
+                        b_coords: b_load_coords,
+                        c_coords: [],
+                        loads: 2 * (T * T),
+                        macs: 0
+                    });
+
+                    // Bundle computes per C element to make visualization manageable and not overly verbose.
+                    // Instead of a step for every single MAC, we can do row by row or just single elements.
+                    // For visualization, let's step one element of C_tile at a time (which internally does T macs)
+                    // if T=4, T^3 = 64 steps just for one tile compute is a lot.
+                    // Let's do it individually per MAC to show the compute clearly but maybe speed it up.
+                    for (let i1 = 0; i1 < T; i1++) {
+                        for (let j1 = 0; j1 < T; j1++) {
+                            for (let k1 = 0; k1 < T; k1++) {
+                                steps.push({
+                                    type: 'mac',
+                                    desc: `SRAM Compute: MAC for C_tile[${i1},${j1}] using A_tile[${i1},${k1}], B_tile[${k1},${j1}]`,
+                                    a_coords: [], // Don't highlight main memory
+                                    b_coords: [],
+                                    c_coords: [], // Don't highlight main mem C yet
+                                    sram_a_coords: [[i1, k1]],
+                                    sram_b_coords: [[k1, j1]],
+                                    sram_c_coords: [[i1, j1]],
+                                    loads: 0, // No main memory load!
+                                    macs: 1,
+                                    actual_c_coords: [i0+i1, j0+j1] // For actual accumulation
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                // Write tile back
+                let c_write_coords = [];
+                for(let r=0; r<T; r++) {
+                    for(let c=0; c<T; c++) {
+                        c_write_coords.push([i0+r, j0+c]);
+                    }
+                }
+                steps.push({
+                    type: 'write_tile',
+                    desc: `Write C tile [${i0}..${i0+T-1}, ${j0}..${j0+T-1}] to Main Memory`,
+                    c_coords: c_write_coords,
+                    loads: 0,
+                    macs: 0
+                });
+            }
+        }
+    }
+
+    function runSimulation() {
+        stopPlay();
+        initUI();
+        if (mode === 'naive') generateNaiveSteps();
+        else generateTiledSteps();
+        renderStep(-1);
+    }
+
+    function updateSpeed() {
+        speedMs = 1010 - parseInt(document.getElementById('speed-slider').value);
+        if (playing) {
+            stopPlay();
+            play();
+        }
+    }
+
+    function togglePlay() {
+        if (playing) stopPlay();
+        else play();
+    }
+
+    function play() {
+        if (currentStepIdx >= steps.length - 1) return;
+        playing = true;
+        const btn = document.getElementById('btn-play');
+        btn.textContent = '⏸';
+        btn.title = 'Pause';
+        
+        playInterval = setInterval(() => {
+            if (currentStepIdx < steps.length - 1) {
+                stepNext();
+            } else {
+                stopPlay();
+            }
+        }, speedMs);
+    }
+
+    function stopPlay() {
+        playing = false;
+        clearInterval(playInterval);
+        const btn = document.getElementById('btn-play');
+        btn.textContent = '▶';
+        btn.title = 'Play';
+    }
+
+    function reset() {
+        stopPlay();
+        currentStepIdx = -1;
+        totalLoads = 0;
+        totalMacs = 0;
+        C_real = Array(N).fill(0).map(() => Array(N).fill(0));
+        renderStep(currentStepIdx);
+        // Clear text in C
+        for(let r=0; r<N; r++) {
+            for(let c=0; c<N; c++) {
+                document.getElementById(`mat-c-${r}-${c}`).textContent = '0';
+                document.getElementById(`mat-c-${r}-${c}`).className = 'cell';
+            }
+        }
+        updateStats();
+    }
+
+    function stepNext() {
+        if (currentStepIdx < steps.length - 1) {
+            currentStepIdx++;
+            const st = steps[currentStepIdx];
+            totalLoads += st.loads;
+            totalMacs += st.macs;
+            
+            if(st.type === 'mac' && st.actual_c_coords) {
+                 C_real[st.actual_c_coords[0]][st.actual_c_coords[1]] += 1;
+            } else if (st.type === 'mac' && !st.actual_c_coords) {
+                 // naive
+                 C_real[st.c_coords[0][0]][st.c_coords[0][1]] += 1;
+            }
+
+            renderStep(currentStepIdx, true);
+        }
+    }
+
+    function stepPrev() {
+        if (currentStepIdx >= 0) {
+            const st = steps[currentStepIdx];
+            totalLoads -= st.loads;
+            totalMacs -= st.macs;
+
+            if(st.type === 'mac' && st.actual_c_coords) {
+                 C_real[st.actual_c_coords[0]][st.actual_c_coords[1]] -= 1;
+            } else if (st.type === 'mac' && !st.actual_c_coords) {
+                 C_real[st.c_coords[0][0]][st.c_coords[0][1]] -= 1;
+            }
+
+            currentStepIdx--;
+            renderStep(currentStepIdx, false);
+        }
+    }
+
+    function clearHighlights() {
+        document.querySelectorAll('.cell').forEach(c => {
+            c.classList.remove('active-a', 'active-b', 'active-c');
+        });
+        // Clear SRAM values if not loading/computing
+        for(let r=0; r<T; r++) {
+            for(let c=0; c<T; c++) {
+                let cellA = document.getElementById(`sram-a-${r}-${c}`);
+                let cellB = document.getElementById(`sram-b-${r}-${c}`);
+                if (cellA) cellA.textContent = '';
+                if (cellB) cellB.textContent = '';
+            }
+        }
+    }
+
+    function renderStep(idx, isForward = true) {
+        clearHighlights();
+        
+        if (idx === -1) {
+            stepInfo.textContent = "Simulation ready. Press Play or Step Forward.";
+            updateStats();
+            return;
+        }
+
+        const st = steps[idx];
+        stepInfo.textContent = `[Step ${idx+1}/${steps.length}] ${st.desc}`;
+
+        // Highlight Main Memory
+        if (st.a_coords) st.a_coords.forEach(([r,c]) => document.getElementById(`mat-a-${r}-${c}`).classList.add('active-a'));
+        if (st.b_coords) st.b_coords.forEach(([r,c]) => document.getElementById(`mat-b-${r}-${c}`).classList.add('active-b'));
+        if (st.c_coords) st.c_coords.forEach(([r,c]) => document.getElementById(`mat-c-${r}-${c}`).classList.add('active-c'));
+        
+        // Highlight SRAM
+        if (st.sram_a_coords) st.sram_a_coords.forEach(([r,c]) => document.getElementById(`sram-a-${r}-${c}`).classList.add('active-a'));
+        if (st.sram_b_coords) st.sram_b_coords.forEach(([r,c]) => document.getElementById(`sram-b-${r}-${c}`).classList.add('active-b'));
+        if (st.sram_c_coords) st.sram_c_coords.forEach(([r,c]) => document.getElementById(`sram-c-${r}-${c}`).classList.add('active-c'));
+
+        // Handle SRAM values visually
+        if (st.type === 'load_tile') {
+            for(let i=0; i<(mode==='tiled'?T:1); i++) {
+                for(let j=0; j<(mode==='tiled'?T:1); j++) {
+                     let cellA = document.getElementById(`sram-a-${i}-${j}`);
+                     let cellB = document.getElementById(`sram-b-${i}-${j}`);
+                     let cellC = document.getElementById(`sram-c-${i}-${j}`);
+                     if (cellA && document.getElementById(`mat-a-${st.a_coords[i*T+j]?.[0]}-${st.a_coords[i*T+j]?.[1]}`)) {
+                         cellA.textContent = 'A'; // or random value, but letter is fine
+                     }
+                     if (cellB) cellB.textContent = 'B';
+                     // When loading a new tile, if it's the start of accumulation
+                     // we should visually reset SRAM C if needed. Let's just keep it simple.
+                }
+            }
+        } else if (st.type === 'mac') {
+             // Show A and B in SRAM 
+             for(let i=0; i<(mode==='tiled'?T:1); i++) {
+                for(let j=0; j<(mode==='tiled'?T:1); j++) {
+                     let cellA = document.getElementById(`sram-a-${i}-${j}`);
+                     let cellB = document.getElementById(`sram-b-${i}-${j}`);
+                     if (cellA) cellA.textContent = 'A';
+                     if (cellB) cellB.textContent = 'B';
+                }
+             }
+
+             // Update SRAM C value display
+             if (st.sram_c_coords) {
+                let [r,c] = st.sram_c_coords[0];
+                let cellC = document.getElementById(`sram-c-${r}-${c}`);
+                if (cellC) {
+                    let actual_r = st.actual_c_coords ? st.actual_c_coords[0] : st.c_coords[0][0];
+                    let actual_c = st.actual_c_coords ? st.actual_c_coords[1] : st.c_coords[0][1];
+                    cellC.textContent = C_real[actual_r][actual_c];
+                }
+
+                // Zero out other C SRAM blocks if it is the start of a tile (when we move to new i0 j0)
+                // just rely on C_real
+             }
+        } else if (st.type === 'write' || st.type === 'write_tile') {
+            // Write to main memory visually - will be handled below
+        }
+
+        // Replay write steps up to current step
+        for(let r=0; r<N; r++) {
+            for(let c=0; c<N; c++) {
+                document.getElementById(`mat-c-${r}-${c}`).textContent = '0';
+                document.getElementById(`mat-c-${r}-${c}`).classList.remove('written-c');
+            }
+        }
+        for(let k=0; k<=idx; k++) {
+             if (steps[k].type === 'write' || steps[k].type === 'write_tile') {
+                 steps[k].c_coords.forEach(([r,c]) => {
+                     let cell = document.getElementById(`mat-c-${r}-${c}`);
+                     cell.textContent = C_real[r][c];
+                     cell.classList.add('written-c');
+                 });
+             }
+        }
+        // Also highlight current write
+        if (st.type === 'write' || st.type === 'write_tile') {
+             st.c_coords.forEach(([r,c]) => {
+                 let cell = document.getElementById(`mat-c-${r}-${c}`);
+                 cell.classList.add('active-c');
+             });
+        }
+
+        updateStats();
+        
+        document.getElementById('btn-prev').disabled = idx === -1;
+        document.getElementById('btn-next').disabled = idx === steps.length - 1;
+    }
+
+    function updateStats() {
+        document.getElementById('stat-loads').textContent = totalLoads;
+        document.getElementById('stat-macs').textContent = totalMacs;
+        
+        const ratio = totalLoads > 0 ? (totalMacs / totalLoads).toFixed(2) : "0.00";
+        document.getElementById('stat-ratio').textContent = ratio;
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            stepNext();
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            stepPrev();
+        } else if (e.key === ' ') {
+            e.preventDefault();
+            togglePlay();
+        }
+    });
+
+    // Init
+    runSimulation();
+    updateSpeed();
+</script>
+</body>
+</html>

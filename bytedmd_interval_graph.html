@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ByteDMD Interval Graph Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #080a15;
+            color: #d0c0f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 50% 0%, rgba(40, 100, 160, 0.15) 0%, transparent 60%),
+                linear-gradient(rgba(30,40,60,0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(30,40,60,0.1) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #app {
+            position: relative; z-index: 1;
+            max-width: 1400px; width: 100%;
+        }
+
+        header { text-align: center; margin-bottom: 24px; }
+        header h1 {
+            font-size: 28px; font-weight: 700;
+            background: linear-gradient(135deg, #a0d0ff 0%, #00f0a0 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; letter-spacing: -0.5px;
+        }
+        header p { font-size: 14px; color: #8090a0; margin-top: 6px; }
+
+        .toolbar {
+            display: flex; align-items: center; justify-content: center;
+            gap: 16px; flex-wrap: wrap; margin-bottom: 24px;
+            padding: 12px 20px;
+            background: rgba(15,20,35,0.6);
+            border: 1px solid rgba(60,80,120,0.2);
+            border-radius: 12px;
+            backdrop-filter: blur(12px);
+        }
+
+        .control-group { display: flex; align-items: center; gap: 8px; }
+        .control-label {
+            font-size: 11px; color: #8090a0;
+            text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+        }
+        
+        button, select {
+            background: rgba(30,40,60,0.5); border: 1px solid rgba(80,100,140,0.3);
+            color: #f0f0ff; font-family: 'Inter', sans-serif;
+            font-size: 13px; font-weight: 500; border-radius: 6px;
+            padding: 6px 14px; cursor: pointer; transition: all 0.2s; outline: none;
+        }
+        button:hover, select:hover { background: rgba(50,70,100,0.6); border-color: rgba(100,120,180,0.5); }
+        select { appearance: none; padding-right: 24px; }
+        
+        .btn-primary { background: rgba(40,200,250,0.2); border-color: rgba(40,200,250,0.5); color: #80e0ff; }
+        .btn-primary:hover { background: rgba(40,200,250,0.4); border-color: rgba(40,200,250,0.7); }
+
+        .workspace {
+            display: flex; gap: 24px; align-items: stretch;
+            flex-wrap: wrap; justify-content: center;
+        }
+
+        .panel {
+            background: rgba(10,12,25,0.7); border: 1px solid rgba(40,60,90,0.3);
+            border-radius: 14px; padding: 24px; flex-grow: 1;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        .panel-title {
+            font-size: 13px; font-weight: 600; color: #90a0c0; 
+            letter-spacing: 0.5px; margin-bottom: 8px; text-transform: uppercase; text-align: center;
+        }
+
+        .canvas-container {
+            position: relative; width: 100%; max-width: 1000px;
+            overflow-x: auto; background: #000; border: 1px solid #304050; border-radius: 8px;
+            margin-top: 16px;
+        }
+
+        canvas {
+            display: block; cursor: crosshair;
+        }
+
+        .axis-labels {
+            display: flex; justify-content: space-between; width: 100%; max-width: 1000px;
+            font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7080a0;
+            padding: 8px 0;
+        }
+
+        .tooltip {
+            position: absolute; background: rgba(20,25,40,0.9);
+            border: 1px solid rgba(100,120,180,0.6); color: #fff;
+            padding: 8px 12px; border-radius: 6px; font-family: 'JetBrains Mono', monospace;
+            font-size: 11px; pointer-events: none; opacity: 0; transition: opacity 0.1s;
+            z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            white-space: pre-wrap;
+        }
+
+        .legend {
+            display: flex; gap: 24px; font-size: 12px; font-family: 'Inter', sans-serif;
+            color: #a0b0d0; margin-bottom: 16px;
+        }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .legend-color { width: 14px; height: 14px; border-radius: 3px; }
+
+        .info-panel {
+            background: rgba(20,25,45,0.6); padding: 16px; border-radius: 8px;
+            border-left: 4px solid #00f0a0; font-size: 13px; color: #b0c0e0;
+            max-width: 1000px; margin-top: 24px; line-height: 1.5;
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <h1>Interval Graph Visualizer</h1>
+        <p>Plotting the exact lifetime of memory allocations over the 2D spatial grid.</p>
+    </header>
+
+    <div class="toolbar">
+        <div class="control-group">
+            <span class="control-label">Algorithm</span>
+            <select id="mode-select" onchange="runSimulation()">
+                <option value="tiled" selected>Tiled (DMA Scratchpad Reuse)</option>
+                <option value="naive">Naive (Static Global Memory)</option>
+            </select>
+        </div>
+        <div class="control-group">
+            <span class="control-label">Size (N)</span>
+            <select id="size-select" onchange="runSimulation()">
+                <option value="8">8x8 (T=4)</option>
+                <option value="16" selected>16x16 (T=4)</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="workspace">
+        <div class="panel">
+            <div class="panel-title">Physical Address Lifetime Graph</div>
+            <p style="font-size: 11px; color:#7080a0; margin-bottom:16px;">Hover over the graph to inspect exact memory allocations at any point in time.</p>
+            
+            <div class="legend">
+                <div class="legend-item"><div class="legend-color" style="background: linear-gradient(to right, #0050ff, #0090ff);"></div> Matrix A Values</div>
+                <div class="legend-item"><div class="legend-color" style="background: linear-gradient(to right, #ff3000, #ff8000);"></div> Matrix B Values</div>
+                <div class="legend-item"><div class="legend-color" style="background: linear-gradient(to right, #00a040, #00e080);"></div> Matrix C Values</div>
+                <div class="legend-item"><div class="legend-color" style="background: #111;"></div> Empty / Unallocated</div>
+            </div>
+
+            <div class="canvas-container">
+                <canvas id="graph-canvas"></canvas>
+                <div id="tooltip" class="tooltip"></div>
+            </div>
+            
+            <div class="axis-labels">
+                <div>&larr; Time = 0</div>
+                <span>Total Algorithmic Operations (Time &rarr;)</span>
+                <div id="time-end">Time = End</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-panel" id="desc-box">
+        ...
+    </div>
+</div>
+
+<script>
+    let N = 16;
+    let T = 4;
+    let mode = 'tiled';
+    let maxAddr = 0;
+    let maxTime = 0;
+    let events = []; // Array of {t, addr, val}
+    let readEvents = []; // Array of {t, addr}
+    let addressMap = {}; // addr -> [{start_t, end_t, val, status}]
+    let memLayout = {}; // Logical labels for addresses
+
+    const canvas = document.getElementById('graph-canvas');
+    const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
+
+    // Deterministic Color Hashing
+    function colorFor(v) {
+        if(!v) return '#111';
+        let parts = v.split('_'); // e.g. A_0_0
+        let type = parts[0];
+        let i = parseInt(parts[1]);
+        let j = parseInt(parts[2]);
+        let total = N * N;
+        let idx = i * N + j;
+        
+        if(type === 'A') {
+            const hue = 200 + (idx / total) * 40; 
+            const lum = 40 + (i / N) * 20;
+            return `hsl(${hue}, 100%, ${lum}%)`;
+        } else if (type === 'B') {
+            const hue = 10 + (idx / total) * 35;
+            const lum = 40 + (j / N) * 20;
+            return `hsl(${hue}, 100%, ${lum}%)`;
+        } else if (type === 'C') {
+            const hue = 130 + (idx / total) * 40;
+            const lum = 40 + (i / N) * 20;
+            return `hsl(${hue}, 100%, ${lum}%)`;
+        }
+        return '#fff';
+    }
+
+    function recordEvent(t, addr, val) {
+        events.push({t, addr, val});
+    }
+
+    function simulate() {
+        events = [];
+        readEvents = [];
+        memLayout = {};
+        let t = 0;
+
+        if (mode === 'naive') {
+            let ptr = 1;
+            let A = ptr; ptr += N*N;
+            let B = ptr; ptr += N*N;
+            let C = ptr; ptr += N*N;
+            maxAddr = ptr - 1;
+            
+            // Build Labels
+            memLayout['A'] = {start: A, end: B-1};
+            memLayout['B'] = {start: B, end: C-1};
+            memLayout['C'] = {start: C, end: maxAddr};
+
+            // Static Allocations
+            for(let i=0; i<N*N; i++) {
+                recordEvent(t, A+i, `A_${Math.floor(i/N)}_${i%N}`);
+                recordEvent(t, B+i, `B_${Math.floor(i/N)}_${i%N}`);
+                recordEvent(t, C+i, `C_${Math.floor(i/N)}_${i%N}`);
+            }
+
+            // Time progression
+            for(let i=0; i<N; i++) {
+                for(let j=0; j<N; j++) {
+                    for(let k=0; k<N; k++) {
+                        t++; // 1 time unit per MAC operation
+                        readEvents.push({t, addr: A + i*N + k});
+                        readEvents.push({t, addr: B + k*N + j});
+                        readEvents.push({t, addr: C + i*N + j});
+                    }
+                }
+            }
+
+            // Assume matrix C values all need to be read at the exact end of the program
+            for(let i=0; i<N*N; i++) readEvents.push({t, addr: C + i});
+            maxTime = t;
+
+        } else {
+            // Tiled
+            let ptr = 1;
+            let fA = ptr; ptr += T*T;
+            let fB = ptr; ptr += T*T;
+            let fC = ptr; ptr += T*T;
+            let A = ptr; ptr += N*N;
+            let B = ptr; ptr += N*N;
+            let C = ptr; ptr += N*N;
+            maxAddr = ptr - 1;
+
+            // Build Labels
+            memLayout['fast_A'] = {start: fA, end: fB-1};
+            memLayout['fast_B'] = {start: fB, end: fC-1};
+            memLayout['fast_C'] = {start: fC, end: A-1};
+            memLayout['A'] = {start: A, end: B-1};
+            memLayout['B'] = {start: B, end: C-1};
+            memLayout['C'] = {start: C, end: maxAddr};
+
+            // Deep static memory allocation
+            for(let i=0; i<N*N; i++) {
+                recordEvent(t, A+i, `A_${Math.floor(i/N)}_${i%N}`);
+                recordEvent(t, B+i, `B_${Math.floor(i/N)}_${i%N}`);
+                recordEvent(t, C+i, `C_${Math.floor(i/N)}_${i%N}`);
+            }
+
+            for (let bi = 0; bi < N; bi += T) {
+                for (let bj = 0; bj < N; bj += T) {
+                    for (let bk = 0; bk < N; bk += T) {
+                        
+                        // DMA Fetch
+                        for (let i = 0; i < T; i++) {
+                            for (let k = 0; k < T; k++) {
+                                t++;
+                                readEvents.push({t, addr: A + (bi + i)*N + (bk + k)});
+                                recordEvent(t, fA + i*T + k, `A_${bi+i}_${bk+k}`);
+                            }
+                        }
+                        for (let k = 0; k < T; k++) {
+                            for (let j = 0; j < T; j++) {
+                                t++;
+                                readEvents.push({t, addr: B + (bk + k)*N + (bj + j)});
+                                recordEvent(t, fB + k*T + j, `B_${bk+k}_${bj+j}`);
+                            }
+                        }
+
+                        // Compute math
+                        for (let i = 0; i < T; i++) {
+                            for (let j = 0; j < T; j++) {
+                                for (let k = 0; k < T; k++) {
+                                    t++;
+                                    // Start accumulator in fC if first chunk
+                                    if (k === 0 && bk === 0) {
+                                        recordEvent(t, fC + i*T + j, `C_${bi+i}_${bj+j}`);
+                                    }
+                                    readEvents.push({t, addr: fA + i*T + k});
+                                    readEvents.push({t, addr: fB + k*T + j});
+                                    readEvents.push({t, addr: fC + i*T + j});
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Assume matrix C values all need to be read at the exact end of the program
+            for(let i=0; i<N*N; i++) readEvents.push({t, addr: C + i});
+            maxTime = t;
+        }
+
+        processEvents();
+    }
+
+    function processEvents() {
+        addressMap = {};
+        let readIdx = {}; // addr -> [reads]
+        for(let addr=1; addr<=maxAddr; addr++) {
+            addressMap[addr] = [];
+            readIdx[addr] = [];
+        }
+        
+        readEvents.forEach(r => {
+            if (readIdx[r.addr]) readIdx[r.addr].push(r.t);
+        });
+
+        let currentState = {};
+        events.sort((a,b) => a.t - b.t);
+        
+        // Helper to finalize interval with dead zone calculation
+        function finalizeInterval(prev, endT, addr) {
+            let rs = readIdx[addr];
+            let maxRead = prev.t;
+            for(let r of rs) {
+                if (r >= prev.t && r <= endT) {
+                    if (r > maxRead) maxRead = r;
+                }
+            }
+            if (maxRead > prev.t) {
+                addressMap[addr].push({start_t: prev.t, end_t: maxRead, val: prev.val, status: 'live'});
+            }
+            if (maxRead < endT) {
+                addressMap[addr].push({start_t: maxRead, end_t: endT, val: prev.val, status: 'dead'});
+            }
+        }
+
+        events.forEach(e => {
+            // Close previous interval if exists
+            let prev = currentState[e.addr];
+            if (prev) {
+                if (prev.t === e.t && prev.val === e.val) return; // redundant
+                finalizeInterval(prev, e.t, e.addr);
+            }
+            currentState[e.addr] = e;
+        });
+
+        // Close all final open intervals
+        for(let addr=1; addr<=maxAddr; addr++) {
+            let last = currentState[addr];
+            if(last) {
+                finalizeInterval(last, maxTime, addr);
+            }
+        }
+    }
+
+    function drawGraph() {
+        // Pixel resolution mapping
+        canvas.width = 1000;
+        // Adjust Y resolution depending on max address mapping so we don't scale it too absurdly thin
+        let rowHeight = Math.max(1, Math.floor(600 / maxAddr)); 
+        canvas.height = maxAddr * rowHeight;
+        
+        ctx.fillStyle = '#080a15';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        let timeScale = canvas.width / maxTime;
+
+        for(let addr=1; addr<=maxAddr; addr++) {
+            let intervals = addressMap[addr];
+            let y = (addr - 1) * rowHeight;
+            
+            // Draw empty background
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, y, canvas.width, rowHeight);
+            
+            intervals.forEach(inv => {
+                let x = inv.start_t * timeScale;
+                let w = (inv.end_t - inv.start_t) * timeScale;
+                // Avoid drawing extremely thin 0px slices visually missing, enforce min 1px if valid timeline exists
+                if (w < 1 && inv.end_t > inv.start_t) w = 1; 
+
+                if (inv.status === 'dead') {
+                    ctx.globalAlpha = 0.15;
+                    ctx.fillStyle = colorFor(inv.val);
+                    ctx.fillRect(x, y, w, rowHeight);
+                    ctx.globalAlpha = 1.0;
+                } else {
+                    ctx.fillStyle = colorFor(inv.val);
+                    ctx.fillRect(x, y, w, rowHeight);
+                }
+            });
+
+            // Draw horizontal partition lines based on memory layout zones
+            Object.keys(memLayout).forEach(zone => {
+                let bounds = memLayout[zone];
+                if (addr === bounds.start) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                    ctx.fillRect(0, y, canvas.width, 1);
+                }
+            });
+        }
+        
+        document.getElementById('time-end').textContent = `Time = ${maxTime}`;
+    }
+
+    // Interactivity
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        // Map back to coordinates
+        let timeScale = canvas.width / maxTime;
+        let rowHeight = canvas.height / maxAddr;
+        
+        let t = Math.floor(mouseX / timeScale);
+        let addr = Math.floor(mouseY / rowHeight) + 1;
+
+        if (addr > 0 && addr <= maxAddr && t >= 0 && t <= maxTime) {
+            let zone = Object.keys(memLayout).find(z => addr >= memLayout[z].start && addr <= memLayout[z].end);
+            
+            let intervals = addressMap[addr];
+            let active = intervals.find(inv => t >= inv.start_t && t < inv.end_t);
+            let valStr = "NULL (Unallocated)";
+            let statColor = "#fff";
+            
+            if (active) {
+                valStr = active.val;
+                if (active.status === 'dead') {
+                    valStr += ' [DEAD]';
+                    statColor = "#ff4040";
+                }
+            }
+
+            tooltip.style.opacity = 1;
+            tooltip.style.left = `${mouseX + 15}px`;
+            let topPos = mouseY + 15;
+            if (topPos + 80 > rect.height) topPos -= 100;
+            tooltip.style.top = `${topPos}px`;
+            
+            tooltip.innerHTML = `Address : <span style="color:#00e0a0;">${addr}</span> [${zone}]<br>Time    : ${t}<br>Value   : <strong style="color:${statColor}">${valStr}</strong>`;
+        } else {
+            tooltip.style.opacity = 0;
+        }
+    });
+
+    canvas.addEventListener('mouseleave', () => { tooltip.style.opacity = 0; });
+
+    function updateDesc() {
+        const box = document.getElementById('desc-box');
+        if (mode === 'naive') {
+            box.innerHTML = `<strong>Naive Strategy Interval Graph:</strong> Notice how the X-axis (Time) shows completely solid, contiguous horizontal color bars. Because matrices <code>A</code>, <code>B</code>, and <code>C</code> are allocated starting from Address 1 and never moved, their values exist forever at those specific deep memory addresses. The hardware must blindly span the entire physical distance across this massive block every single time it computes a cell.`;
+        } else {
+            box.innerHTML = `<strong>Tiled Strategy Interval Graph:</strong> Look closely at the top sliver of addresses (1 to 48) representing <code>fast_A</code>, <code>fast_B</code>, and <code>fast_C</code>! They look like a dense, flickering barcode. These are exactly the colors of the deep matrices mathematically copied (via DMA) into the lowest-cost routing addresses temporarily. The 1D graph perfectly proves how these 48 addresses are infinitely recycled, protecting the hardware from routing distances!`;
+        }
+    }
+
+    function runSimulation() {
+        mode = document.getElementById('mode-select').value;
+        N = parseInt(document.getElementById('size-select').value);
+        T = 4;
+        simulate();
+        drawGraph();
+        updateDesc();
+    }
+
+    // Init
+    runSimulation();
+</script>
+</body>
+</html>

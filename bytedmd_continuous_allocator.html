@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ByteDMD Continuous Allocator Visualizer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: #080512;
+            color: #d0c0f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 50% 0%, rgba(100, 40, 160, 0.15) 0%, transparent 60%),
+                linear-gradient(rgba(30,20,50,0.2) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(30,20,50,0.2) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px, 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        #app {
+            position: relative; z-index: 1;
+            max-width: 1200px; width: 100%;
+        }
+
+        header { text-align: center; margin-bottom: 24px; }
+        header h1 {
+            font-size: 28px; font-weight: 700;
+            background: linear-gradient(135deg, #e0a0ff 0%, #00e0d0 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            background-clip: text; letter-spacing: -0.5px;
+        }
+        header p { font-size: 14px; color: #8070a0; margin-top: 6px; }
+
+        .toolbar {
+            display: flex; align-items: center; justify-content: center;
+            gap: 16px; flex-wrap: wrap; margin-bottom: 24px;
+            padding: 12px 20px;
+            background: rgba(15,10,25,0.6);
+            border: 1px solid rgba(80,60,120,0.2);
+            border-radius: 12px;
+            backdrop-filter: blur(12px);
+        }
+
+        .control-group { display: flex; align-items: center; gap: 8px; }
+        .control-label {
+            font-size: 11px; color: #8070a0;
+            text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+        }
+        
+        button, select {
+            background: rgba(30,20,50,0.5); border: 1px solid rgba(100,80,160,0.3);
+            color: #f0e0ff; font-family: 'Inter', sans-serif;
+            font-size: 13px; font-weight: 500; border-radius: 6px;
+            padding: 6px 14px; cursor: pointer; transition: all 0.2s; outline: none;
+        }
+        button:hover, select:hover { background: rgba(50,30,80,0.6); border-color: rgba(120,100,200,0.5); }
+        .btn-icon {
+            width: 36px; height: 32px; padding: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'JetBrains Mono', monospace; font-size: 14px;
+        }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn-primary { background: rgba(40,200,250,0.2); border-color: rgba(40,200,250,0.5); color: #80e0ff; }
+        .btn-primary:hover { background: rgba(40,200,250,0.4); border-color: rgba(40,200,250,0.7); }
+
+        .telemetry {
+            display: flex; justify-content: center; gap: 20px; margin-bottom: 32px;
+        }
+        .stat-card {
+            background: rgba(15,10,25,0.6); border: 1px solid rgba(80,60,120,0.2);
+            padding: 16px 20px; border-radius: 12px;
+            display: flex; flex-direction: column; align-items: center;
+            min-width: 180px; position: relative;
+        }
+        .stat-label { font-size: 11px; color: #8070a0; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; margin-bottom: 6px; text-align: center; }
+        .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 700; color: #fff; }
+        .stat-sub { font-size: 11px; color: #706090; margin-top: 4px; }
+
+        .stat-card.highlight {
+            background: rgba(20, 60, 40, 0.4);
+            border-color: rgba(0, 220, 140, 0.4);
+            box-shadow: 0 0 20px rgba(0, 220, 140, 0.1);
+        }
+        .stat-card.highlight .stat-value { color: #40f0a0; }
+
+        .workspace {
+            display: flex; flex-direction: column; gap: 24px;
+        }
+
+        .panel {
+            background: rgba(12,8,20,0.7); border: 1px solid rgba(60,40,90,0.3);
+            border-radius: 14px; padding: 24px;
+        }
+        .panel-title {
+            font-size: 13px; font-weight: 600; color: #a090b0; 
+            letter-spacing: 0.5px; margin-bottom: 16px; text-transform: uppercase; text-align: center;
+        }
+
+        /* Continuous Tape styling */
+        .tape-container {
+            width: 100%; border: 1px solid rgba(80,60,120,0.3); border-radius: 8px;
+            background: rgba(5,3,10,0.8); overflow: hidden; padding: 8px;
+            position: relative;
+        }
+        
+        .tape {
+            display: flex; height: 60px; border-radius: 4px; overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05); gap: 2px;
+            position: relative;
+        }
+        
+        .tape-block {
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; color: #fff;
+            position: relative; transition: all 0.2s;
+        }
+        
+        .tape-block .label { z-index: 2; pointer-events: none; }
+        .tape-block .addr { font-size: 8px; color: rgba(255,255,255,0.6); margin-top: 2px; z-index: 2; }
+        
+        /* Default Colors */
+        .blk-A { background: rgba(0, 120, 255, 0.2); border-bottom: 2px solid #0078FF; }
+        .blk-B { background: rgba(255, 120, 0, 0.2); border-bottom: 2px solid #FF7800; }
+        .blk-C { background: rgba(0, 200, 100, 0.2); border-bottom: 2px solid #00C864; }
+        
+        .blk-fA { background: rgba(0, 180, 255, 0.4); border-bottom: 2px solid #00B4FF; }
+        .blk-fB { background: rgba(255, 180, 0, 0.4); border-bottom: 2px solid #FFB400; }
+        .blk-fC { background: rgba(0, 255, 150, 0.4); border-bottom: 2px solid #00FF96; }
+
+        /* active pulses */
+        .tape-block.active {
+            box-shadow: inset 0 0 20px rgba(255,255,255,0.2);
+            filter: brightness(1.7);
+        }
+
+        .step-info {
+            font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #b0a0c0; 
+            padding: 16px 24px; background: rgba(20,10,35,0.6); border-radius: 8px;
+            border-left: 4px solid #b080ff; width: 100%;
+            display: flex; flex-direction: column; gap: 8px; margin-top: 24px;
+        }
+        .step-desc { color: #f0e0ff; }
+        .step-math { color: #b0f0ff; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <header>
+        <h1>Continuous Allocator Visualizer</h1>
+        <p>Proving optimal manual scratchpad pinning vs purely naive geometry routing.</p>
+    </header>
+
+    <div class="toolbar">
+        <div class="control-group">
+            <span class="control-label">Algorithm</span>
+            <select id="mode-select" onchange="runSimulation()">
+                <option value="naive">Strategy A: Naive Matmul</option>
+                <option value="tiled" selected>Strategy B: Manual Tiled (Pinned)</option>
+            </select>
+        </div>
+        
+        <div class="control-group" style="margin-left: 16px;">
+            <button class="btn-icon" onclick="resetSim()" title="Reset">⏮</button>
+            <button class="btn-icon" id="btn-prev" onclick="stepPrev()" title="Step Back">◀</button>
+            <button class="btn-icon" id="btn-next" onclick="stepNext()" title="Step Forward">▶</button>
+            <button class="btn-icon btn-primary" id="btn-play" onclick="togglePlay()" title="Play/Pause">▶</button>
+        </div>
+    </div>
+
+    <div class="telemetry">
+        <div class="stat-card highlight">
+            <div class="stat-label">Total Geometric Cost</div>
+            <div class="stat-value" id="stat-cost">0</div>
+            <div class="stat-sub">Σ ⌈√addr⌉</div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-label">Last Operation Cost</div>
+            <div class="stat-value" id="stat-step-cost">0</div>
+            <div class="stat-sub" id="stat-step-desc">Awaiting step...</div>
+        </div>
+    </div>
+
+    <div class="workspace">
+        <div class="panel">
+            <div class="panel-title">1D Physical Memory Layout (Grid Start = Address 1)</div>
+            <div class="tape-container">
+                <div class="tape" id="tape">
+                    <!-- Javascript generates block proportions -->
+                </div>
+                <div style="font-family: 'Inter'; font-size: 10px; color:#504070; margin-top: 8px; display:flex; justify-content:space-between;">
+                    <span>ALU</span>
+                    <span>Deep Memory Route &rarr;</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="step-info" id="step-info">
+        <div class="step-desc">Simulation ready. Press Play.</div>
+        <div class="step-math"></div>
+    </div>
+</div>
+
+<script>
+    const N = 16;
+    const T = 4;
+    
+    let mode = 'tiled';
+    let simulationSteps = [];
+    let currentStepIdx = -1;
+    let playing = false;
+    let playInterval = null;
+    let speedMs = 400; // Slow enough to read block text
+
+    function getCost(addr) { return Math.ceil(Math.sqrt(Math.max(0, addr - 1))) + 1; } // Matches math.isqrt(max(0, addr - 1)) + 1 behavior
+
+    // Python equivalent to mem.isqrt(max(0, addr - 1)) + 1
+    function blockCost(startAddr, size) {
+        let total = 0;
+        for(let i=0; i<size; i++){
+            total += getCost(startAddr + i);
+        }
+        return total;
+    }
+
+    structLayout = [];
+
+    function generateLayout() {
+        structLayout = [];
+        let ptr = 1;
+
+        if (mode === 'tiled') {
+            structLayout.push({ id:'fA', label: 'fast_A', start: ptr, size: T*T, color: 'blk-fA' }); ptr += T*T;
+            structLayout.push({ id:'fB', label: 'fast_B', start: ptr, size: T*T, color: 'blk-fB' }); ptr += T*T;
+            structLayout.push({ id:'fC', label: 'fast_C', start: ptr, size: T*T, color: 'blk-fC' }); ptr += T*T;
+        }
+
+        structLayout.push({ id:'A', label: 'A', start: ptr, size: N*N, color: 'blk-A' }); ptr += N*N;
+        structLayout.push({ id:'B', label: 'B', start: ptr, size: N*N, color: 'blk-B' }); ptr += N*N;
+        structLayout.push({ id:'C', label: 'C', start: ptr, size: N*N, color: 'blk-C' }); ptr += N*N;
+
+        renderTape();
+    }
+
+    function renderTape() {
+        const tape = document.getElementById('tape');
+        tape.innerHTML = '';
+        structLayout.forEach(blk => {
+            let flexGrow = blk.size;
+            let div = document.createElement('div');
+            div.className = `tape-block ${blk.color}`;
+            div.id = `blk-${blk.id}`;
+            div.style.flex = `${flexGrow} 1 0`;
+            
+            div.innerHTML = `
+                <span class="label">${blk.label}</span>
+                <span class="addr">[${blk.start}-${blk.start + blk.size - 1}]</span>
+            `;
+            tape.appendChild(div);
+        });
+    }
+
+    function generateSteps() {
+        simulationSteps = [];
+        let totalCumCost = 0;
+
+        let findBlk = (id) => structLayout.find(b => b.id === id);
+
+        if (mode === 'naive') {
+            let bA = findBlk('A');
+            let bB = findBlk('B');
+            let bC = findBlk('C');
+
+            for (let i = 0; i < N; i++) {
+                // Group naive simulation visually by row of computation (since per element is 4096 steps)
+                let rowCost = 0;
+                for (let j = 0; j < N; j++) {
+                    for (let k = 0; k < N; k++) {
+                        rowCost += getCost(bA.start + i * N + k);
+                        rowCost += getCost(bB.start + k * N + j);
+                        rowCost += getCost(bC.start + i * N + j);
+                    }
+                }
+                totalCumCost += rowCost;
+                simulationSteps.push({
+                    desc: `Compute Row ${i} of matrix C (16 elements)`,
+                    math: `256 MAC iterations directly into deep memory addresses -> +${rowCost.toLocaleString()}`,
+                    stepCost: rowCost,
+                    cumCost: totalCumCost,
+                    activeBlks: ['A', 'B', 'C']
+                });
+            }
+
+        } else {
+            let bA = findBlk('A'); let bfA = findBlk('fA');
+            let bB = findBlk('B'); let bfB = findBlk('fB');
+            let bC = findBlk('C'); let bfC = findBlk('fC');
+
+            for (let bi = 0; bi < N; bi += T) {
+                for (let bj = 0; bj < N; bj += T) {
+                    for (let bk = 0; bk < N; bk += T) {
+                        
+                        // Phase 1 Fetch
+                        let phase1Cost = 0;
+                        for (let i = 0; i < T; i++) {
+                            for (let k = 0; k < T; k++) phase1Cost += getCost(bA.start + (bi + i) * N + (bk + k));
+                        }
+                        for (let k = 0; k < T; k++) {
+                            for (let j = 0; j < T; j++) phase1Cost += getCost(bB.start + (bk + k) * N + (bj + j));
+                        }
+                        
+                        totalCumCost += phase1Cost;
+                        simulationSteps.push({
+                            desc: `Phase 1: DMA Block Fetch [bi=${bi}, bj=${bj}, bk=${bk}]`,
+                            math: `Read 16e from deep A + 16e from deep B to fast scratchpad -> +${phase1Cost.toLocaleString()}`,
+                            stepCost: phase1Cost,
+                            cumCost: totalCumCost,
+                            activeBlks: ['A', 'B']  // Focus on where the expensive reads hit
+                        });
+
+                        // Phase 2 Compute
+                        let phase2Cost = 0;
+                        for (let i = 0; i < T; i++) {
+                            for (let j = 0; j < T; j++) {
+                                for (let k = 0; k < T; k++) {
+                                    phase2Cost += getCost(bfA.start + i * T + k);
+                                    phase2Cost += getCost(bfB.start + k * T + j);
+                                    phase2Cost += getCost(bfC.start + i * T + j);
+                                }
+                            }
+                        }
+                        totalCumCost += phase2Cost;
+                        simulationSteps.push({
+                            desc: `Phase 2: Compute math locally inside Scratchpad`,
+                            math: `Perform 64 MACs using exclusively pinned addresses (1-48) -> +${phase2Cost.toLocaleString()}`,
+                            stepCost: phase2Cost,
+                            cumCost: totalCumCost,
+                            activeBlks: ['fA', 'fB', 'fC'] // Focus on the cheap reads
+                        });
+
+                    }
+                }
+            }
+        }
+    }
+
+    function runSimulation() {
+        stopPlay();
+        mode = document.getElementById('mode-select').value;
+        generateLayout();
+        generateSteps();
+        currentStepIdx = -1;
+        renderState(-1);
+    }
+
+    function togglePlay() { if (playing) stopPlay(); else play(); }
+    
+    function play() {
+        if (currentStepIdx >= simulationSteps.length - 1) return;
+        playing = true;
+        document.getElementById('btn-play').textContent = '⏸';
+        playInterval = setInterval(() => {
+            if (currentStepIdx < simulationSteps.length - 1) stepNext();
+            else stopPlay();
+        }, speedMs);
+    }
+    
+    function stopPlay() {
+        playing = false;
+        clearInterval(playInterval);
+        document.getElementById('btn-play').textContent = '▶';
+    }
+    
+    function resetSim() { stopPlay(); currentStepIdx = -1; renderState(-1); }
+    
+    function stepNext() { if (currentStepIdx < simulationSteps.length - 1) { currentStepIdx++; renderState(currentStepIdx); } }
+    function stepPrev() { if (currentStepIdx >= 0) { currentStepIdx--; renderState(currentStepIdx); } }
+
+    function renderState(idx) {
+        document.querySelectorAll('.tape-block').forEach(b => b.classList.remove('active'));
+
+        if (idx === -1) {
+            document.getElementById('stat-cost').textContent = '0';
+            document.getElementById('stat-step-cost').textContent = '0';
+            document.getElementById('stat-step-desc').textContent = 'Awaiting step...';
+            document.getElementById('step-info').querySelector('.step-desc').textContent = "Simulation ready. Press Play.";
+            document.getElementById('step-info').querySelector('.step-math').textContent = `Total Steps: ${simulationSteps.length}`;
+            return;
+        }
+
+        const state = simulationSteps[idx];
+        
+        state.activeBlks.forEach(id => {
+            let b = document.getElementById(`blk-${id}`);
+            if(b) b.classList.add('active');
+        });
+
+        document.getElementById('stat-cost').textContent = state.cumCost.toLocaleString();
+        document.getElementById('stat-step-cost').textContent = `+${state.stepCost.toLocaleString()}`;
+        document.getElementById('stat-step-desc').textContent = state.desc;
+
+        document.getElementById('step-info').querySelector('.step-desc').textContent = `[Step ${idx+1}/${simulationSteps.length}] ${state.desc}`;
+        document.getElementById('step-info').querySelector('.step-math').textContent = state.math;
+        
+        document.getElementById('btn-prev').disabled = idx === -1;
+        document.getElementById('btn-next').disabled = idx === simulationSteps.length - 1;
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.key === 'ArrowRight') { e.preventDefault(); stepNext(); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); stepPrev(); }
+        else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+    });
+
+    // Init
+    runSimulation();
+</script>
+</body>
+</html>
