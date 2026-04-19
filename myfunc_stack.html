@@ -334,7 +334,7 @@ const V = {
     p0: { label: 'p₀', bg: 'linear-gradient(135deg,#fb923c,#dc2626)', shadow: 'rgba(251,146,60,0.3)', dot: '#fb923c' },
     p1: { label: 'p₁', bg: 'linear-gradient(135deg,#fb923c,#dc2626)', shadow: 'rgba(251,146,60,0.3)', dot: '#fb923c' },
     p2: { label: 'p₂', bg: 'linear-gradient(135deg,#c084fc,#7c3aed)', shadow: 'rgba(192,132,252,0.3)', dot: '#c084fc' },
-    z:  { label: 'z',  bg: 'linear-gradient(135deg,#ec4899,#be185d)', shadow: 'rgba(236,72,153,0.3)', dot: '#ec4899' },
+    p3:  { label: 'p₃',  bg: 'linear-gradient(135deg,#ec4899,#be185d)', shadow: 'rgba(236,72,153,0.3)', dot: '#ec4899' },
 };
 
 // ============================================================
@@ -416,10 +416,22 @@ const states = [
         reads: [{id: 'p2', depth: 1}, {id: 'e', depth: -5}], cost: 14, delta: 0,
     },
     {
-        label: "Final — Output z",
-        desc: "Execution finishes! Total ByteDMD routing distance for `myfunc` = <strong>14</strong>.",
-        vars: { z: 1 },
+        label: "Step 4C — Store p₃ = p₂ + e",
+        desc: "Sum <strong>p₃</strong> pushed to Geom stack at depth 1.",
+        vars: { p3: 1 },
         reads: [], cost: 14, delta: 0,
+    },
+    {
+        label: "Output Epilogue",
+        desc: "The caller pulls the return value back, so <strong>p₃</strong> is read once more from the top of the Geometric stack.<br>Cost: ⌈√1⌉ = <strong>1</strong>.",
+        vars: { p3: 1 },
+        reads: [{id: 'p3', depth: 1}], cost: 15, delta: 1,
+    },
+    {
+        label: "Final — Output Returned",
+        desc: "Execution finishes! Total ByteDMD routing distance for `myfunc` = <strong>15</strong>.",
+        vars: { p3: 1 },
+        reads: [], cost: 15, delta: 0,
     }
 ];
 
@@ -633,7 +645,8 @@ function renderState() {
     else if (currentState <= 3)   formulaEl.innerHTML = '<strong>p₀</strong> = a · b';
     else if (currentState <= 6)   formulaEl.innerHTML = '<strong>p₁</strong> = c · d';
     else if (currentState <= 9)   formulaEl.innerHTML = '<strong>p₂</strong> = p₀ + p₁';
-    else                          formulaEl.innerHTML = '<strong>z</strong> = p₂ + e';
+    else if (currentState <= 12)  formulaEl.innerHTML = '<strong>p₃</strong> = p₂ + e';
+    else                          formulaEl.innerHTML = '<strong>return</strong> p₃';
 
     // --- Telemetry ---
     document.getElementById('info-label').textContent = st.label;
