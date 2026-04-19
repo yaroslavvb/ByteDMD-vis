@@ -263,7 +263,7 @@
         <div class="side-panel">
             <div class="side-title">Live Memory State</div>
             <table class="stack-table" id="stack-table">
-                <thead><tr><th>Loc</th><th>Var</th><th>Cost</th></tr></thead>
+                <thead><tr><th>Var</th><th>Distance</th><th>Cost</th></tr></thead>
                 <tbody id="stack-tbody"></tbody>
             </table>
             <div class="formula-panel">
@@ -620,8 +620,8 @@ function renderState() {
         const def = V[e.id];
         
         rows += `<tr class="${cls}">
-            <td>${sType}=${dVal}</td>
             <td><span class="var-chip" style="background:${def.dot}"></span>${def.label}</td>
+            <td>${dVal}</td>
             <td>${cost}</td>
         </tr>`;
     });
