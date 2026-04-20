@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ByteDMD Visualizations</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #080c18; color: #e2e8f0; margin: 0; padding: 40px 20px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .container { max-width: 900px; width: 100%; display: flex; flex-direction: column; gap: 14px; }
+        h1 { font-size: 2.3rem; font-weight: 800; text-align: center; margin-bottom: 4px; background: linear-gradient(135deg, #00e5ff 0%, #a78bfa 50%, #f472b6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        p.subtitle { text-align: center; color: #64748b; font-size: 1.05rem; margin-bottom: 30px; font-weight: 300; }
+        
+        .card { background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.1); border-radius: 12px; padding: 22px; text-decoration: none; display: flex; flex-direction: column; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card:hover { transform: translateY(-4px); border-color: rgba(167,139,250,0.5); box-shadow: 0 12px 30px rgba(0,0,0,0.4); background: rgba(30,41,59,0.7); }
+        .card h2 { color: #f8fafc; font-size: 1.25rem; font-weight: 600; margin: 0 0 8px 0; }
+        .card p { color: #94a3b8; font-size: 0.95rem; margin: 0; line-height: 1.6; }
+        
+        .category { font-size: 0.85rem; font-weight: 700; color: #a855f7; text-transform: uppercase; letter-spacing: 1px; margin: 30px 0 6px 0; padding-bottom: 8px; border-bottom: 1px solid rgba(148,163,184,0.1); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ByteDMD Visualizations</h1>
+        <p class="subtitle">Interactive pedagogical simulations illustrating the ByteDMD computational complexity framework.</p>
+
+        <div class="category">Manhattan Spatial Models</div>
+        <a href="myfunc_stack.html" class="card">
+            <h2>myfunc Two-Stack Architecture Trace</h2>
+            <p>Estimating data movement cost of myfunc(a,b,c,d,e) using the formal upper/lower 2D Manhattan Diamond layout with Argument and Geometric pinning.</p>
+        </a>
+        <a href="dotproduct_stack.html" class="card">
+            <h2>Geometric 1x4 Dot Product</h2>
+            <p>Dynamic rendering of the geometric sliding LRU stack clamping mathematically to the continuous working interval.</p>
+        </a>
+        <a href="dotproduct_stack-live-linear.html" class="card">
+            <h2>Linear Live Array Evolution</h2>
+            <p>A sequential layout representation of the strict element liveness and evaporation on dynamic footprints.</p>
+        </a>
+
+        <div class="category">Tiled Matrix Mathematical Proofs</div>
+        <a href="bytedmd_interval_graph.html" class="card">
+            <h2>Interval Graph Lifetimes</h2>
+            <p>A canvas plotting absolute 1D physical memory layouts against computational time, visualizing timeline barcodes to prove the temporal optimality of manual scratchpads.</p>
+        </a>
+        <a href="tiled_matmul_optimal.html" class="card">
+            <h2>White Island LRU Caching</h2>
+            <p>The core interactive playground charting Tiled vs Naive matrix computation. Explores how isolated math routines shelter variables from $\sqrt{D}$ geometric penalties.</p>
+        </a>
+        <a href="bytedmd_lru_stack.html" class="card">
+            <h2>Deep Footprint Tracer</h2>
+            <p>Validates the actual maximum footprint size during tiled vs naive matrix multiplication traversals under various T parameter shifts.</p>
+        </a>
+        <a href="bytedmd_continuous_allocator.html" class="card">
+            <h2>Pinned Spatial Memory Tape</h2>
+            <p>Charts matrices sequentially onto a physical 1D tape evaluating exact continuous wire distance fetches across scaling operations.</p>
+        </a>
+
+        <div class="category">Hardware Arrays</div>
+        <a href="systolic_array.html" class="card">
+            <h2>Systolic Array Base</h2>
+            <p>Hardware layout tracking matrix data loading into systolic processor execution wavefront grids.</p>
+        </a>
+        <a href="systolic_array_large.html" class="card">
+            <h2>Massive Systolic Scale</h2>
+            <p>Large-scale dynamic execution trace modeling propagation latency in multi-dimensional processing clusters.</p>
+        </a>
+    </div>
+</body>
+</html>
